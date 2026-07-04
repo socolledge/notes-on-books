@@ -1,0 +1,989 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Notes on Books">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>Notes on Books</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+:root{
+  --bg:#faf8f4; --panel:#ffffff; --ink:#2b2620; --muted:#8a8177; --line:#e5dfd5;
+  --accent:#7c5c3e; --accent2:#a4834f; --chip:#efe9df; --chip-on:#7c5c3e; --danger:#a04030;
+  --hl:#fdf0a8; --badge:#c2703d; --serif:'Iowan Old Style',Georgia,'Times New Roman',serif;
+  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px}
+button{font-family:var(--sans);cursor:pointer}
+input,select,textarea{font-family:var(--sans);font-size:14px;padding:7px 9px;border:1px solid var(--line);border-radius:7px;background:#fff;color:var(--ink);max-width:100%}
+input:focus,select:focus,textarea:focus,[contenteditable]:focus{outline:2px solid var(--accent2);outline-offset:-1px}
+label{font-size:12px;color:var(--muted);display:block;margin:8px 0 3px;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.btn{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:9px 15px;font-size:14px;font-weight:600}
+.btn:hover{background:#69492e}
+.btn.sec{background:var(--chip);color:var(--ink)}
+.btn.sec:hover{background:#e3dccf}
+.btn.sm{padding:5px 10px;font-size:12.5px;border-radius:6px}
+.btn.danger{background:var(--danger)}
+.hidden{display:none!important}
+.muted{color:var(--muted)}
+.small{font-size:12.5px}
+a{color:var(--accent)}
+h1,h2,h3{font-family:var(--serif);font-weight:600}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;gap:5px;background:var(--chip);border-radius:999px;padding:4px 11px;font-size:12.5px;cursor:pointer;border:1px solid transparent;user-select:none}
+.chip.on{background:var(--chip-on);color:#fff}
+.chip .x{opacity:.55;font-weight:700;margin-left:2px}
+.chip .x:hover{opacity:1}
+.badge{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:5px;background:var(--badge);color:#fff;text-transform:uppercase;letter-spacing:.05em}
+.badge.gray{background:var(--muted)}
+mark{background:var(--hl)}
+/* ---------- centered auth/setup ---------- */
+.center-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.center-wrap .card{width:100%;max-width:430px}
+.center-wrap h1{margin:4px 0 2px;font-size:26px}
+/* ---------- app shell ---------- */
+#appbar{position:sticky;top:0;z-index:30;background:var(--panel);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:4px;padding:6px 12px;padding-top:calc(6px + env(safe-area-inset-top))}
+#appbar .brand{font-family:var(--serif);font-weight:700;font-size:17px;margin-right:8px;white-space:nowrap}
+#appbar nav{display:flex;gap:2px;flex:1;overflow-x:auto}
+#appbar nav button{background:none;border:none;border-radius:7px;padding:7px 12px;font-size:13.5px;color:var(--muted);font-weight:600;white-space:nowrap}
+#appbar nav button.on{background:var(--chip);color:var(--ink)}
+#main{max-width:1180px;margin:0 auto;padding:14px 14px calc(30px + env(safe-area-inset-bottom))}
+/* ---------- editor ribbon ---------- */
+#ribbon{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:12px}
+#ribbon .rib-row{display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap;padding:5px 0}
+#ribbon .rib-row + .rib-row{border-top:1px dashed var(--line)}
+#cite-preview{font-family:var(--serif);font-size:13.5px;flex:1;min-width:220px;line-height:1.45;padding:4px 2px}
+#cite-preview i{font-style:italic}
+.fieldcol{display:flex;flex-direction:column;min-width:0}
+.fieldcol label{margin:0 0 3px}
+/* ---------- panes ---------- */
+#panes{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.pane{background:var(--panel);border:1px solid var(--line);border-radius:12px;display:flex;flex-direction:column;min-height:300px}
+.pane-head{display:flex;align-items:center;gap:6px;padding:7px 10px;border-bottom:1px solid var(--line)}
+.pane-head .ttl{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);flex:1}
+.tbtn{border:1px solid var(--line);background:#fff;border-radius:6px;min-width:30px;height:28px;font-size:13px;padding:0 7px}
+.tbtn:hover{background:var(--chip)}
+.rte{flex:1;padding:14px 16px;font-family:var(--serif);font-size:16.5px;line-height:1.65;overflow-y:auto;min-height:220px}
+.rte:empty:before{content:attr(data-ph);color:var(--muted);font-style:italic}
+.rte p{margin:0 0 .8em}
+/* ---------- library list ---------- */
+.note-card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:10px}
+.note-card .q{font-family:var(--serif);font-size:15.5px;line-height:1.55;border-left:3px solid var(--accent2);padding-left:12px;margin:8px 0}
+.note-card .n{font-size:13.5px;line-height:1.5;color:#4a443c;margin:8px 0}
+.note-card .cite{font-family:var(--serif);font-size:12.5px;color:var(--muted)}
+.note-card .meta{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px}
+.list-item{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin-bottom:8px;cursor:pointer}
+.list-item:hover{border-color:var(--accent2)}
+.list-item .grow{flex:1;min-width:0}
+/* ---------- modal ---------- */
+#modal-bg{position:fixed;inset:0;background:rgba(40,32,22,.45);z-index:50;display:flex;align-items:flex-start;justify-content:center;padding:30px 14px;overflow-y:auto}
+#modal{background:var(--panel);border-radius:14px;max-width:640px;width:100%;padding:20px;max-height:none}
+#modal h3{margin:0 0 10px}
+/* ---------- toast ---------- */
+#toast{position:fixed;bottom:calc(24px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 18px;border-radius:10px;font-size:13.5px;z-index:99;box-shadow:0 6px 20px rgba(0,0,0,.25)}
+/* ---------- settings ---------- */
+.set-section{margin-bottom:22px}
+.set-section h3{margin:0 0 8px;font-size:17px}
+table.tags{border-collapse:collapse;width:100%}
+table.tags td{border-bottom:1px solid var(--line);padding:6px 8px;font-size:13.5px}
+/* ---------- responsive (iPhone) ---------- */
+@media (max-width:760px){
+  #panes{grid-template-columns:1fr}
+  .rte{min-height:150px}
+  #appbar .brand{font-size:15px}
+  #ribbon .rib-row{gap:6px}
+}
+.sugg{border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:6px 0;font-size:13px;cursor:pointer}
+.sugg:hover{background:var(--chip)}
+.warn{background:#fbeee7;border:1px solid #e8c9b4;border-radius:8px;padding:8px 12px;font-size:13px;color:#7a4a28;margin:6px 0}
+</style>
+</head>
+<body>
+
+<!-- ===== First-run: Supabase config ===== -->
+<div id="view-setup" class="center-wrap hidden"><div class="card">
+  <h1>Notes on Books</h1>
+  <p class="muted small">One-time setup: connect this app to your Supabase project. In the Supabase dashboard go to <b>Project Settings → Data API</b> and copy the two values below. They are stored only on this device.</p>
+  <label>Project URL</label>
+  <input id="su-url" style="width:100%" placeholder="https://xxxx.supabase.co">
+  <label>Anon / public API key</label>
+  <input id="su-key" style="width:100%" placeholder="eyJ... or sb_publishable_...">
+  <div style="margin-top:14px"><button class="btn" onclick="saveSetup()">Connect</button></div>
+</div></div>
+
+<!-- ===== Auth ===== -->
+<div id="view-auth" class="center-wrap hidden"><div class="card">
+  <h1>Notes on Books</h1>
+  <p class="muted small">Sign in to your library.</p>
+  <label>Email</label>
+  <input id="auth-email" type="email" style="width:100%" autocomplete="username">
+  <label>Password</label>
+  <input id="auth-pass" type="password" style="width:100%" autocomplete="current-password">
+  <div class="row" style="margin-top:14px">
+    <button class="btn" onclick="signIn()">Sign in</button>
+    <button class="btn sec" onclick="signUp()">Create account</button>
+  </div>
+  <p id="auth-msg" class="small" style="color:var(--danger)"></p>
+  <p class="small muted"><a href="#" onclick="resetSetup();return false">Change Supabase connection</a></p>
+</div></div>
+
+<!-- ===== App ===== -->
+<div id="app" class="hidden">
+  <div id="appbar">
+    <span class="brand">📚 Notes on Books</span>
+    <nav>
+      <button data-v="editor" class="on" onclick="nav('editor')">Editor</button>
+      <button data-v="library" onclick="nav('library')">Library</button>
+      <button data-v="works" onclick="nav('works')">Works</button>
+      <button data-v="people" onclick="nav('people')">Authors</button>
+      <button data-v="settings" onclick="nav('settings')">Settings</button>
+    </nav>
+    <button class="btn sm sec" onclick="newNote()">+ New note</button>
+  </div>
+  <div id="main">
+    <div id="view-editor"></div>
+    <div id="view-library" class="hidden"></div>
+    <div id="view-works" class="hidden"></div>
+    <div id="view-people" class="hidden"></div>
+    <div id="view-settings" class="hidden"></div>
+  </div>
+</div>
+
+<div id="modal-bg" class="hidden" onclick="if(event.target===this)closeModal()"><div id="modal"></div></div>
+<div id="toast" class="hidden"></div>
+
+<script>
+/* ================= state & boot ================= */
+let sb=null, USER=null;
+let DB={people:[],works:[],wc:[],notes:[],purposes:[],settings:{}};
+let CUR=null;            // note being edited (object, id null if new)
+let dirty=false;
+const $=id=>document.getElementById(id);
+const esc=s=>(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const stripHtml=h=>{const d=document.createElement('div');d.innerHTML=h||'';return d.textContent||''};
+const toast=m=>{const t=$('toast');t.textContent=m;t.classList.remove('hidden');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.add('hidden'),2600)};
+
+function boot(){
+  const url=localStorage.getItem('nob_url'), key=localStorage.getItem('nob_key');
+  if(!url||!key){show('setup');return}
+  sb=window.supabase.createClient(url,key);
+  sb.auth.getSession().then(async({data})=>{
+    if(data.session){USER=data.session.user;await loadAll();show('app');renderAll()}
+    else show('auth');
+  });
+}
+function show(v){['view-setup','view-auth','app'].forEach(x=>$(x).classList.add('hidden'));$(v==='app'?'app':'view-'+v).classList.remove('hidden')}
+function saveSetup(){
+  const u=$('su-url').value.trim().replace(/\/$/,''), k=$('su-key').value.trim();
+  if(!/^https:\/\/.+supabase\.(co|in)/.test(u)||!k){alert('Please paste both the project URL and the anon key.');return}
+  localStorage.setItem('nob_url',u);localStorage.setItem('nob_key',k);boot();
+}
+function resetSetup(){localStorage.removeItem('nob_url');localStorage.removeItem('nob_key');show('setup')}
+async function signIn(){
+  const{data,error}=await sb.auth.signInWithPassword({email:$('auth-email').value.trim(),password:$('auth-pass').value});
+  if(error){$('auth-msg').textContent=error.message;return}
+  USER=data.user;await loadAll();show('app');renderAll();
+}
+async function signUp(){
+  const{data,error}=await sb.auth.signUp({email:$('auth-email').value.trim(),password:$('auth-pass').value});
+  if(error){$('auth-msg').textContent=error.message;return}
+  if(data.session){USER=data.user;await loadAll();show('app');renderAll()}
+  else $('auth-msg').textContent='Account created. Check your email to confirm, then sign in.';
+}
+async function loadAll(){
+  const fetch=async t=>{let all=[],from=0;for(;;){const{data,error}=await sb.from(t).select('*').range(from,from+999);if(error){toast(t+': '+error.message);return all}all=all.concat(data);if(data.length<1000)break;from+=1000}return all};
+  [DB.people,DB.works,DB.wc,DB.notes,DB.purposes]=await Promise.all([fetch('people'),fetch('works'),fetch('work_contributors'),fetch('notes'),fetch('purposes')]);
+  DB.notes.sort((a,b)=>(b.date_added||'').localeCompare(a.date_added||''));
+  DB.people.sort((a,b)=>(a.sort_name||a.name).localeCompare(b.sort_name||b.name));
+  DB.works.sort((a,b)=>a.title.localeCompare(b.title));
+  DB.purposes.sort((a,b)=>(a.position||0)-(b.position||0));
+  const{data:st}=await sb.from('settings').select('*').maybeSingle();
+  DB.settings=(st&&st.data)||{citation_style:'chicago',pinned_tags:[]};
+}
+async function saveSettings(){await sb.from('settings').upsert({user_id:USER.id,data:DB.settings})}
+
+/* ================= helpers ================= */
+const P=id=>DB.people.find(p=>p.id===id);
+const W=id=>DB.works.find(w=>w.id===id);
+const contribs=(wid,role)=>DB.wc.filter(c=>c.work_id===wid&&(!role||c.role===role)).sort((a,b)=>a.position-b.position).map(c=>P(c.person_id)).filter(Boolean);
+const allTags=()=>{const s=new Set();DB.notes.forEach(n=>(n.tags||[]).forEach(t=>s.add(t)));return[...s].sort((a,b)=>a.localeCompare(b))};
+const tagCounts=()=>{const m={};DB.notes.forEach(n=>(n.tags||[]).forEach(t=>m[t]=(m[t]||0)+1));return m};
+function invertName(p){return p.sort_name&&p.sort_name.includes(',')?p.sort_name:p.name}
+function nameList(ps,invertFirst){ // "Last, First, and First Last" style joining
+  if(!ps.length)return'';
+  const names=ps.map((p,i)=>(i===0&&invertFirst)?invertName(p):p.name);
+  if(names.length===1)return names[0];
+  if(names.length===2)return names[0]+' and '+names[1];
+  return names.slice(0,-1).join(', ')+', and '+names[names.length-1];
+}
+const LOC_TYPES={page:'Page',eebo:'EEBO image',chapter:'Chapter',kindle:'Kindle loc.',folio:'Folio/sig.',other:'Other'};
+function locatorStr(locs,style){
+  if(!locs||!locs.length)return'';
+  return locs.map(l=>{
+    if(l.type==='page')return l.value;
+    if(l.type==='eebo')return'EEBO image '+l.value;
+    if(l.type==='kindle')return'Kindle loc. '+l.value;
+    if(l.type==='chapter')return'ch. '+l.value;
+    if(l.type==='folio')return'fol. '+l.value;
+    return l.value;
+  }).join(', ');
+}
+
+/* ================= citations ================= */
+// returns {html, text} — html uses <i> for italics
+function citeWork(work,opts){
+  // opts: {style:'chicago'|'mla', form:'note'|'bib'|'intext', locators, chapter_title, chapter_author}
+  const o=opts||{}; const style=o.style||DB.settings.citation_style||'chicago';
+  if(!work)return{html:'',text:''};
+  const authors=contribs(work.id,'author'), editors=contribs(work.id,'editor'), trans=contribs(work.id,'translator');
+  const pub=work.pub||{};
+  const locs=locatorStr(o.locators);
+  const T=t=>'<i>'+esc(t)+'</i>';
+  let html='';
+  const pubBlock=()=>{ // "Place: Publisher, Year" with graceful fallbacks
+    const bits=[];
+    if(pub.place&&pub.publisher)bits.push(pub.place+': '+pub.publisher);
+    else if(pub.publisher)bits.push(pub.publisher);
+    else if(pub.place)bits.push(pub.place);
+    else if(pub.imprint)bits.push(pub.imprint.replace(/\s*::\s*/g,': '));
+    if(pub.year)bits.push(pub.year);
+    return bits.join(', ');
+  };
+  if(style==='mla'){
+    if(o.form==='intext'){
+      const a=authors[0]?authors[0].name.split(' ').pop():work.title;
+      return wrap('('+esc(a)+(locs?' '+esc(locs):'')+')');
+    }
+    // MLA works cited
+    let s='';
+    if(o.chapter_author||o.chapter_title){
+      const ca=o.chapter_author||nameList(authors,true);
+      s=esc(invertLoose(ca))+'. "'+esc(o.chapter_title||'')+'." '+T(work.title)+', ';
+      if(editors.length)s+='edited by '+esc(nameList(editors,false))+', ';
+    }else{
+      if(authors.length)s=esc(nameList(authors,true))+'. ';
+      else if(editors.length)s=esc(nameList(editors,true))+', editor'+(editors.length>1?'s':'')+'. ';
+      s+=T(work.title)+'. ';
+      if(trans.length)s+='Translated by '+esc(nameList(trans,false))+'. ';
+    }
+    const pb=[];
+    if(pub.publisher)pb.push(esc(pub.publisher));else if(pub.imprint)pb.push(esc(pub.imprint.replace(/\s*::\s*/g,': ')));
+    if(pub.year)pb.push(esc(pub.year));
+    s+=pb.join(', ')+'.';
+    if(o.form==='note'&&locs)s+=' '+esc(locs)+'.';
+    return wrap(s);
+  }
+  // Chicago notes-bibliography
+  if(o.form==='bib'){
+    let s='';
+    if(o.chapter_author||o.chapter_title){
+      s=esc(invertLoose(o.chapter_author||''))+'. "'+esc(o.chapter_title||'')+'." In '+T(work.title);
+      if(editors.length)s+=', edited by '+esc(nameList(editors,false));
+      s+='. ';
+    }else{
+      if(authors.length)s=esc(nameList(authors,true))+'. ';
+      else if(editors.length)s=esc(nameList(editors,true))+', ed'+(editors.length>1?'s':'')+'. ';
+      s+=T(work.title)+'. ';
+      if(!o.chapter_title&&authors.length&&editors.length)s+='Edited by '+esc(nameList(editors,false))+'. ';
+      if(trans.length)s+='Translated by '+esc(nameList(trans,false))+'. ';
+    }
+    const pb=pubBlock();
+    s+=esc(pb)+'.';
+    return wrap(s.replace(/\.\.$/,'.'));
+  }
+  // footnote form (default)
+  let s='';
+  if(o.chapter_author||o.chapter_title){
+    s=esc(o.chapter_author||nameList(authors,false))+', "'+esc(o.chapter_title||'')+'," in '+T(work.title);
+    if(editors.length)s+=', ed. '+esc(nameList(editors,false));
+  }else{
+    if(authors.length)s=esc(nameList(authors,false))+', ';
+    else if(editors.length)s=esc(nameList(editors,false))+', ed'+(editors.length>1?'s':'')+'., ';
+    s+=T(work.title);
+    if(authors.length&&editors.length)s+=', ed. '+esc(nameList(editors,false));
+    if(trans.length)s+=', trans. '+esc(nameList(trans,false));
+  }
+  const pb=pubBlock();
+  if(pb)s+=' ('+esc(pb)+')';
+  if(locs)s+=', '+esc(locs);
+  s+='.';
+  return wrap(s);
+  function wrap(h){const d=document.createElement('div');d.innerHTML=h;return{html:h,text:d.textContent}}
+}
+function invertLoose(name){ // "First Last" -> "Last, First"
+  const parts=(name||'').trim().split(/\s+/);
+  if(parts.length<2)return name||'';
+  return parts[parts.length-1]+', '+parts.slice(0,-1).join(' ');
+}
+function citeNoteObj(n,form,style){
+  const w=W(n.work_id);
+  return citeWork(w,{style:style||DB.settings.citation_style,form:form||'note',locators:n.locators,chapter_title:n.chapter_title,chapter_author:n.chapter_author});
+}
+async function copyRich(html,text){
+  try{
+    if(navigator.clipboard&&window.ClipboardItem){
+      await navigator.clipboard.write([new ClipboardItem({
+        'text/html':new Blob([html],{type:'text/html'}),
+        'text/plain':new Blob([text],{type:'text/plain'})})]);
+    }else{await navigator.clipboard.writeText(text)}
+    toast('Copied');
+  }catch(e){
+    const ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();toast('Copied');
+  }
+}
+function copyNote(n,mode){ // mode: quote | quote_cite | cite | bib
+  const c=citeNoteObj(n,'note');
+  const w=W(n.work_id);
+  const surrogate=w&&w.source_status!=='published';
+  if(mode==='cite'){copyRich(c.html,c.text)}
+  else if(mode==='bib'){const b=citeNoteObj(n,'bib');copyRich(b.html,b.text)}
+  else if(mode==='quote'){copyRich(n.quote_html,stripHtml(n.quote_html))}
+  else{
+    const qt=stripHtml(n.quote_html);
+    copyRich('<p>“'+n.quote_html.replace(/^<p>|<\/p>$/g,'')+'” '+c.html+'</p>','“'+qt+'” '+c.text);
+  }
+  if(surrogate&&(mode==='cite'||mode==='quote_cite'||mode==='bib'))toast('⚠️ Surrogate source — cite the original');
+}
+</script>
+<script>
+/* ================= nav ================= */
+function nav(v){
+  document.querySelectorAll('#appbar nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
+  ['editor','library','works','people','settings'].forEach(x=>$('view-'+x).classList.toggle('hidden',x!==v));
+  if(v==='library')renderLibrary();
+  if(v==='works')renderWorks();
+  if(v==='people')renderPeople();
+  if(v==='settings')renderSettings();
+}
+function renderAll(){renderEditor();renderLibrary();}
+
+/* ================= editor ================= */
+function blankNote(){return{id:null,work_id:null,quote_html:'',note_html:'',locators:[],tags:[],purposes:[],purpose_values:{},chapter_title:'',chapter_author:'',date_added:new Date().toISOString()}}
+function newNote(){CUR=blankNote();nav('editor');renderEditor()}
+function editNote(id){CUR=JSON.parse(JSON.stringify(DB.notes.find(n=>n.id===id)));nav('editor');renderEditor()}
+
+function renderEditor(){
+  if(!CUR)CUR=blankNote();
+  const w=W(CUR.work_id);
+  const authorOpts=DB.people.map(p=>`<option value="${p.id}">${esc(invertName(p))}</option>`).join('');
+  const selAuthor=w?(contribs(w.id,'author')[0]||contribs(w.id,'editor')[0]||{}).id:CUR._authorSel;
+  const worksOf=selAuthor?DB.works.filter(x=>DB.wc.some(c=>c.work_id===x.id&&c.person_id===selAuthor)):DB.works;
+  const workOpts=worksOf.map(x=>`<option value="${x.id}" ${x.id===CUR.work_id?'selected':''}>${esc(x.title)}</option>`).join('');
+  const c=w?citeWork(w,{form:'note',locators:CUR.locators,chapter_title:CUR.chapter_title,chapter_author:CUR.chapter_author}):{html:'<span class="muted">No work selected — choose or create one.</span>'};
+  const surrogate=w&&w.source_status!=='published';
+  const pinned=(DB.settings.pinned_tags||[]).map(t=>`<span class="chip ${CUR.tags.includes(t)?'on':''}" onclick="toggleTag('${esc(t).replace(/'/g,"\\'")}')">${esc(t)}</span>`).join('');
+  const curTags=CUR.tags.map(t=>`<span class="chip on">${esc(t)}<span class="x" onclick="rmTag('${esc(t).replace(/'/g,"\\'")}')">×</span></span>`).join('');
+  const purpChips=DB.purposes.map(p=>`<span class="chip ${CUR.purposes.includes(p.name)?'on':''}" onclick="togglePurpose('${esc(p.name).replace(/'/g,"\\'")}')">${esc(p.name)}</span>`).join('');
+  const locRows=(CUR.locators||[]).map((l,i)=>`<span class="chip">${esc(LOC_TYPES[l.type]||l.type)}: ${esc(l.value)}<span class="x" onclick="rmLoc(${i})">×</span></span>`).join('');
+  $('view-editor').innerHTML=`
+  <div id="ribbon">
+    <div class="rib-row">
+      <div class="fieldcol"><label>Author</label>
+        <select id="ed-author" onchange="pickAuthor(this.value)"><option value="">— all authors —</option>${authorOpts}</select></div>
+      <div class="fieldcol"><label>Work</label>
+        <select id="ed-work" onchange="pickWork(this.value)"><option value="">— select work —</option>${workOpts}</select></div>
+      <div class="fieldcol"><label>&nbsp;</label><div class="row">
+        <button class="btn sm sec" onclick="openWorkModal(null)">+ New work</button>
+        ${w?`<button class="btn sm sec" onclick="openWorkModal('${w.id}')">Edit work</button>`:''}
+      </div></div>
+      <div class="fieldcol" style="flex:1;min-width:200px"><label>Citation preview (${(DB.settings.citation_style||'chicago')==='chicago'?'Chicago':'MLA'} footnote)</label>
+        <div id="cite-preview">${c.html}${surrogate?' <span class="badge">'+esc(w.source_status)+' — cite original</span>':''}</div></div>
+      <div class="fieldcol"><label>Copy</label><div class="row">
+        <button class="btn sm sec" onclick="copyCur('quote')">Quote</button>
+        <button class="btn sm sec" onclick="copyCur('quote_cite')">Quote + cite</button>
+        <button class="btn sm sec" onclick="copyCur('cite')">Citation</button>
+        <button class="btn sm sec" onclick="copyCur('bib')">Bibliography</button>
+      </div></div>
+    </div>
+    <div class="rib-row">
+      <div class="fieldcol"><label>Locators</label><div class="row">${locRows}
+        <select id="loc-type">${Object.entries(LOC_TYPES).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select>
+        <input id="loc-val" placeholder="value" style="width:110px" onkeydown="if(event.key==='Enter')addLoc()">
+        <button class="btn sm sec" onclick="addLoc()">Add</button></div></div>
+      <div class="fieldcol"><label>Chapter (edited volumes)</label><div class="row">
+        <input id="ed-chtitle" placeholder="Chapter title" value="${esc(CUR.chapter_title)}" onchange="CUR.chapter_title=this.value;refreshCite()" style="width:170px">
+        <input id="ed-chauthor" placeholder="Chapter author" value="${esc(CUR.chapter_author)}" onchange="CUR.chapter_author=this.value;refreshCite()" style="width:150px"></div></div>
+      <div class="fieldcol"><label>Purpose</label><div class="row">${purpChips||'<span class="muted small">none defined</span>'}</div></div>
+    </div>
+    <div id="purpose-fields"></div>
+    <div class="rib-row">
+      <div class="fieldcol" style="flex:1"><label>Tags</label><div class="row">
+        ${pinned}${pinned?'<span style="border-left:1px solid var(--line);height:20px"></span>':''}${curTags}
+        <input id="tag-in" list="tag-list" placeholder="add tag…" style="width:130px" onkeydown="if(event.key==='Enter'){addTagFromInput()}" onchange="addTagFromInput()">
+        <datalist id="tag-list">${allTags().map(t=>`<option value="${esc(t)}">`).join('')}</datalist>
+      </div></div>
+    </div>
+  </div>
+  <div id="panes">
+    <div class="pane"><div class="pane-head"><span class="ttl">Quote</span>${rteBar('q')}</div>
+      <div class="rte" id="rte-q" contenteditable="true" data-ph="Paste or type the quotation…"></div></div>
+    <div class="pane"><div class="pane-head"><span class="ttl">My notes</span>${rteBar('n')}</div>
+      <div class="rte" id="rte-n" contenteditable="true" data-ph="Your thoughts on this passage…"></div></div>
+  </div>
+  <div class="row" style="margin-top:12px">
+    <button class="btn" onclick="saveNote()">💾 Save note</button>
+    <button class="btn sec" onclick="newNote()">New</button>
+    ${CUR.id?'<button class="btn danger" onclick="deleteNote()">Delete</button>':''}
+    <span class="muted small">${CUR.id?'Editing existing note':'New note'} · ${new Date(CUR.date_added).toLocaleDateString()}</span>
+  </div>`;
+  $('rte-q').innerHTML=CUR.quote_html||'';
+  $('rte-n').innerHTML=CUR.note_html||'';
+  ['q','n'].forEach(k=>$('rte-'+k).addEventListener('input',()=>{dirty=true}));
+  renderPurposeFields();
+}
+function rteBar(k){
+  const b=(cmd,lab,arg)=>`<button class="tbtn" onmousedown="event.preventDefault();fmt('${cmd}','${arg||''}')" title="${cmd}">${lab}</button>`;
+  return b('bold','<b>B</b>')+b('italic','<i>I</i>')+b('underline','<u>U</u>')+
+    `<button class="tbtn" style="background:var(--hl)" onmousedown="event.preventDefault();fmt('hiliteColor','','#fdf0a8')" title="highlight">✺</button>`+
+    `<button class="tbtn" onmousedown="event.preventDefault();fmt('hiliteColor','','transparent')" title="remove highlight">⌫✺</button>`+
+    `<button class="tbtn" onmousedown="event.preventDefault();fmt('removeFormat')" title="clear formatting">Tx</button>`;
+}
+function fmt(cmd,_,arg){document.execCommand(cmd,false,arg||null)}
+function syncPanes(){CUR.quote_html=$('rte-q').innerHTML;CUR.note_html=$('rte-n').innerHTML}
+function refreshCite(){
+  syncPanes();
+  const w=W(CUR.work_id);
+  const c=w?citeWork(w,{form:'note',locators:CUR.locators,chapter_title:CUR.chapter_title,chapter_author:CUR.chapter_author}):{html:'<span class="muted">No work selected.</span>'};
+  const el=$('cite-preview');if(el)el.innerHTML=c.html;
+}
+function pickAuthor(pid){syncPanes();CUR._authorSel=pid||null;if(pid){const wks=DB.works.filter(x=>DB.wc.some(c=>c.work_id===x.id&&c.person_id===pid));if(!wks.some(x=>x.id===CUR.work_id))CUR.work_id=wks.length===1?wks[0].id:null}renderEditor()}
+function pickWork(wid){syncPanes();CUR.work_id=wid||null;renderEditor()}
+function toggleTag(t){syncPanes();CUR.tags.includes(t)?CUR.tags=CUR.tags.filter(x=>x!==t):CUR.tags.push(t);renderEditor()}
+function rmTag(t){syncPanes();CUR.tags=CUR.tags.filter(x=>x!==t);renderEditor()}
+function addTagFromInput(){const v=$('tag-in').value.trim();if(!v)return;$('tag-in').value='';if(!CUR.tags.includes(v)){syncPanes();CUR.tags.push(v);renderEditor();setTimeout(()=>$('tag-in')&&$('tag-in').focus(),50)}}
+function togglePurpose(name){syncPanes();CUR.purposes.includes(name)?CUR.purposes=CUR.purposes.filter(x=>x!==name):CUR.purposes.push(name);renderEditor()}
+function addLoc(){const t=$('loc-type').value,v=$('loc-val').value.trim();if(!v)return;syncPanes();CUR.locators.push({type:t,value:v});renderEditor()}
+function rmLoc(i){syncPanes();CUR.locators.splice(i,1);renderEditor()}
+function renderPurposeFields(){
+  const host=$('purpose-fields');if(!host)return;
+  let h='';
+  CUR.purposes.forEach(pn=>{
+    const p=DB.purposes.find(x=>x.name===pn);if(!p||!(p.fields||[]).length)return;
+    const vals=(CUR.purpose_values||{})[pn]||{};
+    h+=`<div class="rib-row"><div class="fieldcol" style="min-width:70px"><label>${esc(pn)} fields</label></div>`;
+    p.fields.forEach(f=>{
+      const v=vals[f.key]||'';
+      if(f.type==='select')
+        h+=`<div class="fieldcol"><label>${esc(f.label)}</label><select onchange="setPV('${esc(pn)}','${esc(f.key)}',this.value)"><option value=""></option>${(f.options||[]).map(o=>`<option ${o===v?'selected':''}>${esc(o)}</option>`).join('')}</select></div>`;
+      else
+        h+=`<div class="fieldcol"><label>${esc(f.label)}</label><input value="${esc(v)}" onchange="setPV('${esc(pn)}','${esc(f.key)}',this.value)" style="width:150px"></div>`;
+    });
+    h+='</div>';
+  });
+  host.innerHTML=h;
+}
+function setPV(pn,key,val){if(!CUR.purpose_values)CUR.purpose_values={};if(!CUR.purpose_values[pn])CUR.purpose_values[pn]={};CUR.purpose_values[pn][key]=val}
+function copyCur(mode){syncPanes();copyNote(CUR,mode)}
+async function saveNote(){
+  syncPanes();
+  if(!CUR.work_id&&!confirm('No work selected — save anyway?'))return;
+  if(!stripHtml(CUR.quote_html).trim()&&!stripHtml(CUR.note_html).trim()){toast('Nothing to save');return}
+  const rec={work_id:CUR.work_id,quote_html:CUR.quote_html,note_html:CUR.note_html,locators:CUR.locators,tags:CUR.tags,purposes:CUR.purposes,purpose_values:CUR.purpose_values,chapter_title:CUR.chapter_title,chapter_author:CUR.chapter_author,updated_at:new Date().toISOString()};
+  if(CUR.id){
+    const{error}=await sb.from('notes').update(rec).eq('id',CUR.id);
+    if(error){toast(error.message);return}
+    Object.assign(DB.notes.find(n=>n.id===CUR.id),rec);
+  }else{
+    rec.date_added=CUR.date_added;
+    const{data,error}=await sb.from('notes').insert(rec).select().single();
+    if(error){toast(error.message);return}
+    DB.notes.unshift(data);CUR.id=data.id;
+  }
+  dirty=false;toast('Saved');renderEditor();
+}
+async function deleteNote(){
+  if(!confirm('Delete this note permanently?'))return;
+  const{error}=await sb.from('notes').delete().eq('id',CUR.id);
+  if(error){toast(error.message);return}
+  DB.notes=DB.notes.filter(n=>n.id!==CUR.id);newNote();toast('Deleted');
+}
+
+/* ================= work modal (create/edit, parser, lookup) ================= */
+let MW=null; // work being edited in modal
+function openWorkModal(wid){
+  syncPanes&&CUR&&syncPanes();
+  const w=wid?W(wid):null;
+  MW=w?JSON.parse(JSON.stringify(w)):{id:null,title:'',pub:{place:'',publisher:'',year:'',imprint:'',edition:''},source_status:'published',original_work_id:null,urls:[],tags:[],notes:''};
+  MW._authors=w?contribs(w.id,'author').map(p=>p.name):[];
+  MW._editors=w?contribs(w.id,'editor').map(p=>p.name):[];
+  MW._translators=w?contribs(w.id,'translator').map(p=>p.name):[];
+  renderWorkModal();
+}
+function renderWorkModal(){
+  const pub=MW.pub||{};
+  const peopleList='<datalist id="ppl-list">'+DB.people.map(p=>`<option value="${esc(p.name)}">`).join('')+'</datalist>';
+  const roleRow=(role,arr)=>`<div class="row" style="margin:2px 0">
+     <span class="small muted" style="width:80px;text-transform:capitalize">${role}s</span>
+     ${arr.map((n,i)=>`<span class="chip on">${esc(n)}<span class="x" onclick="MW._${role}s.splice(${i},1);renderWorkModal()">×</span></span>`).join('')}
+     <input list="ppl-list" placeholder="add ${role}…" style="width:140px" onkeydown="if(event.key==='Enter'){addRole('${role}',this.value);this.value=''}" onchange="addRole('${role}',this.value);this.value=''"></div>`;
+  const origOpts=DB.works.filter(x=>x.id!==MW.id).map(x=>`<option value="${x.id}" ${x.id===MW.original_work_id?'selected':''}>${esc(x.title)}</option>`).join('');
+  $('modal').innerHTML=`
+  <h3>${MW.id?'Edit work':'New work'}</h3>
+  ${peopleList}
+  <label>Citation parser — paste a full citation and I'll split it into fields</label>
+  <div class="row"><input id="cp-in" style="flex:1" placeholder='e.g. John Owen, Overcoming Sin and Temptation (Wheaton: Crossway, 2006)'>
+  <button class="btn sm sec" onclick="parseCitation()">Parse</button>
+  <button class="btn sm sec" onclick="lookupOnline()">🔎 Look up online</button></div>
+  <div id="cp-sugg"></div>
+  <label>Title</label><input id="mw-title" style="width:100%" value="${esc(MW.title)}" onchange="MW.title=this.value">
+  ${roleRow('author',MW._authors)}${roleRow('editor',MW._editors)}${roleRow('translator',MW._translators)}
+  <div class="row">
+    <div class="fieldcol"><label>Place</label><input style="width:120px" value="${esc(pub.place||'')}" onchange="MW.pub.place=this.value"></div>
+    <div class="fieldcol"><label>Publisher</label><input style="width:180px" value="${esc(pub.publisher||'')}" onchange="MW.pub.publisher=this.value"></div>
+    <div class="fieldcol"><label>Year</label><input style="width:70px" value="${esc(pub.year||'')}" onchange="MW.pub.year=this.value"></div>
+    <div class="fieldcol"><label>Edition</label><input style="width:90px" value="${esc(pub.edition||'')}" onchange="MW.pub.edition=this.value"></div>
+  </div>
+  <label>Original imprint (early-modern / EEBO — kept verbatim)</label>
+  <input style="width:100%" value="${esc(pub.imprint||'')}" onchange="MW.pub.imprint=this.value">
+  <div class="row">
+    <div class="fieldcol"><label>Source status</label>
+      <select onchange="MW.source_status=this.value;renderWorkModal()">
+        <option value="published" ${MW.source_status==='published'?'selected':''}>Published — citable</option>
+        <option value="eebo" ${MW.source_status==='eebo'?'selected':''}>EEBO original scan</option>
+        <option value="surrogate" ${MW.source_status==='surrogate'?'selected':''}>Surrogate (OCR PDF etc.) — cite original</option>
+      </select></div>
+    ${MW.source_status==='surrogate'?`<div class="fieldcol" style="flex:1"><label>Original work (link for citation)</label>
+      <select onchange="MW.original_work_id=this.value||null"><option value="">— none yet —</option>${origOpts}</select></div>`:''}
+  </div>
+  ${MW.source_status==='surrogate'?'<div class="warn">⚠️ Quotes from this work will carry a "cite original" reminder.</div>':''}
+  <label>URLs (one per line)</label>
+  <textarea style="width:100%" rows="2" onchange="MW.urls=this.value.split('\\n').map(s=>s.trim()).filter(Boolean)">${esc((MW.urls||[]).join('\n'))}</textarea>
+  <label>Notes about this work</label>
+  <textarea style="width:100%" rows="2" onchange="MW.notes=this.value">${esc(stripHtml(MW.notes))}</textarea>
+  ${MW.review_flag?'<div class="warn">Imported flag: '+esc(MW.review_flag)+' <button class="btn sm sec" onclick="MW.review_flag=\'\';renderWorkModal()">Clear</button></div>':''}
+  <div class="row" style="margin-top:14px">
+    <button class="btn" onclick="saveWork()">Save work</button>
+    <button class="btn sec" onclick="closeModal()">Cancel</button>
+    ${MW.id?'<button class="btn danger" onclick="deleteWork()">Delete</button>':''}
+  </div>`;
+  $('modal-bg').classList.remove('hidden');
+}
+function addRole(role,name){name=(name||'').trim();if(!name)return;MW['_'+role+'s'].push(name);renderWorkModal()}
+function closeModal(){$('modal-bg').classList.add('hidden')}
+function parseCitation(){
+  const s=$('cp-in').value.trim();if(!s)return;
+  // year
+  const ym=s.match(/\b(1[4-9]\d\d|20[0-2]\d)\b/);if(ym)MW.pub.year=ym[1];
+  // (Place: Publisher, Year) — Chicago
+  let m=s.match(/\(([^:()]+):\s*([^,()]+),\s*(1[4-9]\d\d|20[0-2]\d)\)/);
+  if(m){MW.pub.place=m[1].trim();MW.pub.publisher=m[2].trim()}
+  else{m=s.match(/([A-Z][\w .&']+?):\s*([\w .&']+?),\s*(1[4-9]\d\d|20[0-2]\d)/);if(m){MW.pub.place=m[1].trim();MW.pub.publisher=m[2].trim()}}
+  // author + title: "Last, First. Title." or "First Last, Title ("
+  let author='',title='';
+  let mm=s.match(/^([^.,]+,[^.]+?)\.\s+(.+?)[.(]/);   // bibliography style
+  if(mm){author=mm[1].trim();title=mm[2].trim();const p=author.split(',');author=(p[1]||'').trim()+' '+p[0].trim()}
+  else{mm=s.match(/^(.+?),\s+(.+?)\s*\(/);if(mm){author=mm[1].trim();title=mm[2].trim()}}
+  if(title)MW.title=title.replace(/[.,]$/,'');
+  if(author&&!MW._authors.length)MW._authors.push(author.trim());
+  if(/printed|imprinted/i.test(s)&&!MW.pub.publisher)MW.pub.imprint=s;
+  renderWorkModal();
+  $('cp-sugg').innerHTML='<div class="sugg" style="cursor:default">Parsed what I could — please review the fields below, then use 🔎 to verify online if needed.</div>';
+}
+async function lookupOnline(){
+  const q=[MW.title,(MW._authors[0]||'')].filter(Boolean).join(' ')||$('cp-in').value.trim();
+  if(!q){toast('Enter a title first');return}
+  $('cp-sugg').innerHTML='<div class="sugg" style="cursor:default">Searching Open Library…</div>';
+  try{
+    const r=await fetch('https://openlibrary.org/search.json?limit=5&q='+encodeURIComponent(q));
+    const j=await r.json();
+    if(!j.docs||!j.docs.length){$('cp-sugg').innerHTML='<div class="sugg" style="cursor:default">No matches found.</div>';return}
+    $('cp-sugg').innerHTML=j.docs.map((d,i)=>`<div class="sugg" onclick='applySugg(${i})'>
+      <b>${esc(d.title||'')}</b> — ${esc((d.author_name||[]).join(', '))}<br>
+      <span class="muted">${esc((d.publisher||[])[0]||'')} ${esc(String(d.first_publish_year||''))}</span></div>`).join('');
+    window._suggs=j.docs;
+  }catch(e){$('cp-sugg').innerHTML='<div class="sugg" style="cursor:default">Lookup failed: '+esc(e.message)+'</div>'}
+}
+function applySugg(i){
+  const d=window._suggs[i];
+  if(d.title)MW.title=d.title;
+  if(d.author_name)MW._authors=[...new Set([...(d.author_name.slice(0,3))])];
+  if(d.publisher&&d.publisher[0])MW.pub.publisher=d.publisher[0];
+  if(d.first_publish_year&&!MW.pub.year)MW.pub.year=String(d.first_publish_year);
+  renderWorkModal();
+}
+async function ensurePerson(name){
+  const k=name.toLowerCase();
+  let p=DB.people.find(x=>x.name.toLowerCase()===k);
+  if(p)return p.id;
+  const parts=name.split(/\s+/);
+  const sort=parts.length>1?parts[parts.length-1]+', '+parts.slice(0,-1).join(' '):name;
+  const{data,error}=await sb.from('people').insert({name,sort_name:sort,urls:[],tags:[]}).select().single();
+  if(error){toast(error.message);throw error}
+  DB.people.push(data);DB.people.sort((a,b)=>(a.sort_name||a.name).localeCompare(b.sort_name||b.name));
+  return data.id;
+}
+async function saveWork(){
+  if(!MW.title.trim()){toast('Title required');return}
+  const rec={title:MW.title.trim(),pub:MW.pub,source_status:MW.source_status,original_work_id:MW.original_work_id,review_flag:MW.review_flag||'',urls:MW.urls,tags:MW.tags,notes:MW.notes};
+  let wid=MW.id;
+  if(wid){const{error}=await sb.from('works').update(rec).eq('id',wid);if(error){toast(error.message);return}Object.assign(W(wid),rec)}
+  else{const{data,error}=await sb.from('works').insert(rec).select().single();if(error){toast(error.message);return}DB.works.push(data);DB.works.sort((a,b)=>a.title.localeCompare(b.title));wid=data.id}
+  // sync contributors
+  await sb.from('work_contributors').delete().eq('work_id',wid);
+  DB.wc=DB.wc.filter(c=>c.work_id!==wid);
+  const rows=[];
+  for(const[role,arr]of[['author',MW._authors],['editor',MW._editors],['translator',MW._translators]])
+    for(let i=0;i<arr.length;i++)rows.push({work_id:wid,person_id:await ensurePerson(arr[i]),role,position:i});
+  if(rows.length){const{data,error}=await sb.from('work_contributors').insert(rows).select();if(error){toast(error.message);return}DB.wc.push(...data)}
+  if(CUR)CUR.work_id=wid;
+  closeModal();toast('Work saved');renderEditor();
+}
+async function deleteWork(){
+  const n=DB.notes.filter(x=>x.work_id===MW.id).length;
+  if(!confirm(`Delete this work${n?` (${n} notes will lose their work link)`:''}?`))return;
+  const{error}=await sb.from('works').delete().eq('id',MW.id);
+  if(error){toast(error.message);return}
+  DB.works=DB.works.filter(x=>x.id!==MW.id);DB.wc=DB.wc.filter(c=>c.work_id!==MW.id);
+  DB.notes.forEach(x=>{if(x.work_id===MW.id)x.work_id=null});
+  if(CUR&&CUR.work_id===MW.id)CUR.work_id=null;
+  closeModal();renderEditor();
+}
+</script>
+
+<script>
+/* ================= library ================= */
+let LIB={q:'',inQ:true,inN:true,inT:true,tags:[],purpose:'',work:'',person:''};
+function renderLibrary(){
+  const counts=tagCounts();
+  const pinned=(DB.settings.pinned_tags||[]);
+  const topTags=[...pinned,...Object.keys(counts).filter(t=>!pinned.includes(t)).sort((a,b)=>counts[b]-counts[a]).slice(0,8)];
+  const results=libResults();
+  $('view-library').innerHTML=`
+  <div id="ribbon">
+    <div class="rib-row">
+      <input id="lib-q" placeholder="Search…" value="${esc(LIB.q)}" style="flex:1;min-width:160px" oninput="LIB.q=this.value;renderLibResults()">
+      <span class="chip ${LIB.inQ?'on':''}" onclick="LIB.inQ=!LIB.inQ;renderLibrary()">in quotes</span>
+      <span class="chip ${LIB.inN?'on':''}" onclick="LIB.inN=!LIB.inN;renderLibrary()">in notes</span>
+      <span class="chip ${LIB.inT?'on':''}" onclick="LIB.inT=!LIB.inT;renderLibrary()">in tags</span>
+      <select onchange="LIB.purpose=this.value;renderLibrary()">
+        <option value="">any purpose</option>
+        ${DB.purposes.map(p=>`<option ${LIB.purpose===p.name?'selected':''}>${esc(p.name)}</option>`).join('')}
+      </select>
+      <select onchange="LIB.person=this.value;renderLibrary()">
+        <option value="">any author</option>
+        ${DB.people.map(p=>`<option value="${p.id}" ${LIB.person===p.id?'selected':''}>${esc(invertName(p))}</option>`).join('')}
+      </select>
+      <select onchange="LIB.work=this.value;renderLibrary()">
+        <option value="">any work</option>
+        ${DB.works.map(w=>`<option value="${w.id}" ${LIB.work===w.id?'selected':''}>${esc(w.title)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="rib-row"><span class="small muted" style="align-self:center">Filter tags (AND):</span>
+      ${topTags.map(t=>`<span class="chip ${LIB.tags.includes(t)?'on':''}" onclick="libTag('${esc(t).replace(/'/g,"\\'")}')">${esc(t)}</span>`).join('')}
+      <input id="lib-tag-in" list="tag-list-lib" placeholder="+ tag filter" style="width:110px" onchange="if(this.value){libTag(this.value);this.value=''}">
+      <datalist id="tag-list-lib">${allTags().map(t=>`<option value="${esc(t)}">`).join('')}</datalist>
+      ${LIB.tags.length||LIB.q||LIB.purpose||LIB.person||LIB.work?'<button class="btn sm sec" onclick="clearLib()">Clear filters</button>':''}
+    </div>
+  </div>
+  <div id="lib-results"></div>`;
+  renderLibResults();
+}
+function libTag(t){LIB.tags.includes(t)?LIB.tags=LIB.tags.filter(x=>x!==t):LIB.tags.push(t);renderLibrary()}
+function clearLib(){LIB={q:'',inQ:true,inN:true,inT:true,tags:[],purpose:'',work:'',person:''};renderLibrary()}
+function libResults(){
+  const q=LIB.q.trim().toLowerCase();
+  const toks=q?q.split(/\s+/):[];
+  return DB.notes.filter(n=>{
+    if(LIB.work&&n.work_id!==LIB.work)return false;
+    if(LIB.person){const w=W(n.work_id);if(!w||!DB.wc.some(c=>c.work_id===w.id&&c.person_id===LIB.person))return false}
+    if(LIB.purpose&&!(n.purposes||[]).includes(LIB.purpose))return false;
+    if(LIB.tags.length&&!LIB.tags.every(t=>(n.tags||[]).includes(t)))return false;
+    if(!toks.length)return true;
+    const w=W(n.work_id);
+    let hay='';
+    if(LIB.inQ)hay+=' '+stripHtml(n.quote_html).toLowerCase();
+    if(LIB.inN)hay+=' '+stripHtml(n.note_html).toLowerCase();
+    if(LIB.inT)hay+=' '+(n.tags||[]).join(' ').toLowerCase();
+    if(w){hay+=' '+w.title.toLowerCase();contribs(w.id).forEach(p=>hay+=' '+p.name.toLowerCase())}
+    return toks.every(t=>hay.includes(t));
+  });
+}
+function hl(html){
+  const q=LIB.q.trim();if(!q)return html;
+  let out=html;
+  q.split(/\s+/).forEach(t=>{
+    if(t.length<2)return;
+    const re=new RegExp('('+t.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')(?![^<]*>)','gi');
+    out=out.replace(re,'<mark>$1</mark>');
+  });
+  return out;
+}
+function renderLibResults(){
+  const rs=libResults();
+  const host=$('lib-results');if(!host)return;
+  host.innerHTML=`<p class="small muted">${rs.length} note${rs.length===1?'':'s'}</p>`+
+  rs.slice(0,200).map(n=>{
+    const w=W(n.work_id);
+    const c=citeNoteObj(n,'note');
+    const surrogate=w&&w.source_status!=='published';
+    return `<div class="note-card">
+      <div class="cite">${c.html||'<span class="muted">no work</span>'} ${surrogate?'<span class="badge">cite original</span>':''}</div>
+      ${n.quote_html?'<div class="q">'+hl(n.quote_html)+'</div>':''}
+      ${n.note_html?'<div class="n">'+hl(n.note_html)+'</div>':''}
+      <div class="meta">
+        ${(n.purposes||[]).map(p=>'<span class="badge gray">'+esc(p)+'</span>').join('')}
+        ${(n.tags||[]).map(t=>`<span class="chip" onclick="libTag('${esc(t).replace(/'/g,"\\'")}')">${esc(t)}</span>`).join('')}
+        <span style="flex:1"></span>
+        <button class="btn sm sec" onclick="copyNote(DB.notes.find(x=>x.id==='${n.id}'),'quote')">Quote</button>
+        <button class="btn sm sec" onclick="copyNote(DB.notes.find(x=>x.id==='${n.id}'),'quote_cite')">Q + cite</button>
+        <button class="btn sm sec" onclick="copyNote(DB.notes.find(x=>x.id==='${n.id}'),'cite')">Cite</button>
+        <button class="btn sm" onclick="editNote('${n.id}')">Edit</button>
+      </div></div>`;
+  }).join('')+(rs.length>200?'<p class="muted small">Showing first 200 — refine your search.</p>':'');
+}
+
+/* ================= works & people views ================= */
+function renderWorks(){
+  $('view-works').innerHTML=`<div class="row" style="margin-bottom:10px"><h2 style="margin:0;flex:1">Works</h2>
+    <button class="btn sm" onclick="openWorkModal(null)">+ New work</button></div>`+
+  DB.works.map(w=>{
+    const a=contribs(w.id,'author').map(p=>p.name).join(', ')||contribs(w.id,'editor').map(p=>p.name+' (ed.)').join(', ');
+    const n=DB.notes.filter(x=>x.work_id===w.id).length;
+    return `<div class="list-item" onclick="openWorkModal('${w.id}')">
+      <div class="grow"><b>${esc(w.title)}</b><br><span class="small muted">${esc(a)}${(w.pub&&w.pub.year)?' · '+esc(w.pub.year):''}</span>
+      ${(w.urls||[]).map(u=>` <a class="small" href="${esc(u)}" target="_blank" onclick="event.stopPropagation()">link</a>`).join('')}</div>
+      ${w.source_status!=='published'?'<span class="badge">'+esc(w.source_status)+'</span>':''}
+      ${w.review_flag?'<span class="badge gray" title="'+esc(w.review_flag)+'">review</span>':''}
+      <span class="chip">${n} notes</span></div>`;
+  }).join('');
+}
+let MP=null;
+function renderPeople(){
+  $('view-people').innerHTML=`<div class="row" style="margin-bottom:10px"><h2 style="margin:0;flex:1">Authors & contributors</h2>
+    <button class="btn sm" onclick="openPersonModal(null)">+ New person</button></div>`+
+  DB.people.map(p=>{
+    const wn=DB.wc.filter(c=>c.person_id===p.id).length;
+    return `<div class="list-item" onclick="openPersonModal('${p.id}')">
+      <div class="grow"><b>${esc(invertName(p))}</b>${p.dates?' <span class="small muted">('+esc(p.dates)+')</span>':''}
+      ${(p.urls||[]).map(u=>` <a class="small" href="${esc(u)}" target="_blank" onclick="event.stopPropagation()">link</a>`).join('')}</div>
+      <span class="chip">${wn} work${wn===1?'':'s'}</span></div>`;
+  }).join('');
+}
+function openPersonModal(pid){
+  MP=pid?JSON.parse(JSON.stringify(P(pid))):{id:null,name:'',sort_name:'',dates:'',notes:'',urls:[],tags:[]};
+  $('modal').innerHTML=`<h3>${MP.id?'Edit person':'New person'}</h3>
+  <label>Name (First Last)</label><input style="width:100%" value="${esc(MP.name)}" onchange="MP.name=this.value">
+  <label>Sort name (Last, First)</label><input style="width:100%" value="${esc(MP.sort_name)}" onchange="MP.sort_name=this.value">
+  <label>Dates (e.g. 1616–1683)</label><input value="${esc(MP.dates)}" onchange="MP.dates=this.value">
+  <label>URLs (one per line — bio pages etc.)</label>
+  <textarea style="width:100%" rows="2" onchange="MP.urls=this.value.split('\\n').map(s=>s.trim()).filter(Boolean)">${esc((MP.urls||[]).join('\n'))}</textarea>
+  <label>Notes</label><textarea style="width:100%" rows="3" onchange="MP.notes=this.value">${esc(stripHtml(MP.notes))}</textarea>
+  <div class="row" style="margin-top:14px">
+    <button class="btn" onclick="savePerson()">Save</button>
+    <button class="btn sec" onclick="closeModal()">Cancel</button>
+    ${MP.id?'<button class="btn danger" onclick="deletePerson()">Delete</button>':''}
+  </div>`;
+  $('modal-bg').classList.remove('hidden');
+}
+async function savePerson(){
+  if(!MP.name.trim()){toast('Name required');return}
+  if(!MP.sort_name.trim()){const p=MP.name.trim().split(/\s+/);MP.sort_name=p.length>1?p[p.length-1]+', '+p.slice(0,-1).join(' '):MP.name}
+  const rec={name:MP.name.trim(),sort_name:MP.sort_name.trim(),dates:MP.dates,notes:MP.notes,urls:MP.urls,tags:MP.tags};
+  if(MP.id){const{error}=await sb.from('people').update(rec).eq('id',MP.id);if(error){toast(error.message);return}Object.assign(P(MP.id),rec)}
+  else{const{data,error}=await sb.from('people').insert(rec).select().single();if(error){toast(error.message);return}DB.people.push(data)}
+  DB.people.sort((a,b)=>(a.sort_name||a.name).localeCompare(b.sort_name||b.name));
+  closeModal();renderPeople();toast('Saved');
+}
+async function deletePerson(){
+  if(!confirm('Delete this person? Their name will be removed from all works.'))return;
+  const{error}=await sb.from('people').delete().eq('id',MP.id);
+  if(error){toast(error.message);return}
+  DB.people=DB.people.filter(p=>p.id!==MP.id);DB.wc=DB.wc.filter(c=>c.person_id!==MP.id);
+  closeModal();renderPeople();
+}
+</script>
+
+<script>
+/* ================= settings ================= */
+function renderSettings(){
+  const counts=tagCounts();
+  const pinned=DB.settings.pinned_tags||[];
+  $('view-settings').innerHTML=`
+  <h2>Settings</h2>
+  <div class="card set-section">
+    <h3>Citation style</h3>
+    <p class="small muted">Used everywhere a citation is shown, copied, or exported.</p>
+    <select onchange="DB.settings.citation_style=this.value;saveSettings();toast('Style set')">
+      <option value="chicago" ${DB.settings.citation_style!=='mla'?'selected':''}>Chicago / Turabian (notes-bibliography)</option>
+      <option value="mla" ${DB.settings.citation_style==='mla'?'selected':''}>MLA</option>
+    </select>
+  </div>
+  <div class="card set-section">
+    <h3>Pinned tags</h3>
+    <p class="small muted">Shown as one-tap chips in the editor ribbon. Click to unpin; add from the list below.</p>
+    <div class="row">${pinned.map(t=>`<span class="chip on" onclick="unpin('${esc(t).replace(/'/g,"\\'")}')">${esc(t)} ×</span>`).join('')||'<span class="muted small">none pinned</span>'}</div>
+    <div class="row" style="margin-top:8px">
+      <input id="pin-in" list="tag-list-set" placeholder="tag to pin…" onchange="if(this.value){pin(this.value);this.value=''}">
+      <datalist id="tag-list-set">${allTags().map(t=>`<option value="${esc(t)}">`).join('')}</datalist>
+    </div>
+  </div>
+  <div class="card set-section">
+    <h3>Purposes & their fields</h3>
+    <p class="small muted">A purpose (e.g. PhD, Sermon prep) adds its own fields to a note when selected. Configure fields per purpose.</p>
+    <div id="purp-admin">${DB.purposes.map(p=>purpAdminRow(p)).join('')}</div>
+    <div class="row" style="margin-top:8px">
+      <input id="purp-new" placeholder="new purpose name…">
+      <button class="btn sm" onclick="addPurpose()">Add purpose</button>
+    </div>
+  </div>
+  <div class="card set-section">
+    <h3>Tag management</h3>
+    <p class="small muted">Rename merges into an existing tag if the new name already exists.</p>
+    <table class="tags">${Object.entries(counts).sort((a,b)=>b[1]-a[1]).map(([t,c])=>
+      `<tr><td>${esc(t)}</td><td class="muted">${c}</td>
+       <td><button class="btn sm sec" onclick="renameTag('${esc(t).replace(/'/g,"\\'")}')">Rename</button>
+       <button class="btn sm sec" onclick="deleteTag('${esc(t).replace(/'/g,"\\'")}')">Delete</button></td></tr>`).join('')}</table>
+  </div>
+  <div class="card set-section">
+    <h3>Backup & data</h3>
+    <p class="small muted">Export everything, or restore/import from a backup JSON. Drop exports into your Google Drive for safekeeping.</p>
+    <div class="row">
+      <button class="btn" onclick="exportJSON()">⬇ Full backup (JSON)</button>
+      <button class="btn sec" onclick="exportCSV()">⬇ Notes as CSV</button>
+      <label class="btn sec" style="margin:0">⬆ Import backup JSON<input type="file" accept=".json" style="display:none" onchange="importJSON(this.files[0])"></label>
+    </div>
+    <p class="small muted" id="imp-status"></p>
+  </div>
+  <div class="card set-section">
+    <h3>Account</h3>
+    <p class="small muted">${esc((USER&&USER.email)||'')}</p>
+    <button class="btn sec" onclick="sb.auth.signOut().then(()=>location.reload())">Sign out</button>
+  </div>`;
+}
+function purpAdminRow(p){
+  return `<div style="border:1px solid var(--line);border-radius:9px;padding:10px;margin:8px 0">
+    <div class="row"><b>${esc(p.name)}</b><span style="flex:1"></span>
+      <button class="btn sm sec" onclick="addField('${p.id}')">+ field</button>
+      <button class="btn sm danger" onclick="delPurpose('${p.id}')">Delete purpose</button></div>
+    ${(p.fields||[]).map((f,i)=>`<div class="row" style="margin-top:6px">
+      <input value="${esc(f.label)}" style="width:160px" onchange="updField('${p.id}',${i},'label',this.value)">
+      <select onchange="updField('${p.id}',${i},'type',this.value)">
+        <option value="text" ${f.type==='text'?'selected':''}>text</option>
+        <option value="select" ${f.type==='select'?'selected':''}>dropdown</option>
+      </select>
+      ${f.type==='select'?`<input placeholder="options, comma-separated" style="flex:1" value="${esc((f.options||[]).join(', '))}" onchange="updField('${p.id}',${i},'options',this.value)">`:''}
+      <button class="btn sm sec" onclick="rmField('${p.id}',${i})">×</button></div>`).join('')}
+  </div>`;
+}
+async function persistPurpose(p){const{error}=await sb.from('purposes').update({name:p.name,fields:p.fields,position:p.position}).eq('id',p.id);if(error)toast(error.message)}
+async function addPurpose(){
+  const name=$('purp-new').value.trim();if(!name)return;
+  const{data,error}=await sb.from('purposes').insert({name,fields:[],position:DB.purposes.length}).select().single();
+  if(error){toast(error.message);return}
+  DB.purposes.push(data);renderSettings();
+}
+async function delPurpose(id){
+  const p=DB.purposes.find(x=>x.id===id);
+  if(!confirm(`Delete purpose "${p.name}"? Notes keep their data but the fields will no longer display.`))return;
+  await sb.from('purposes').delete().eq('id',id);
+  DB.purposes=DB.purposes.filter(x=>x.id!==id);renderSettings();
+}
+function addField(pid){
+  const p=DB.purposes.find(x=>x.id===pid);
+  const label=prompt('Field label (e.g. Theological Loci):');if(!label)return;
+  p.fields=p.fields||[];
+  p.fields.push({key:label.toLowerCase().replace(/[^a-z0-9]+/g,'_'),label,type:'text',options:[]});
+  persistPurpose(p);renderSettings();
+}
+function updField(pid,i,k,v){
+  const p=DB.purposes.find(x=>x.id===pid);
+  if(k==='options')p.fields[i].options=v.split(',').map(s=>s.trim()).filter(Boolean);
+  else p.fields[i][k]=v;
+  persistPurpose(p);if(k==='type')renderSettings();
+}
+function rmField(pid,i){const p=DB.purposes.find(x=>x.id===pid);p.fields.splice(i,1);persistPurpose(p);renderSettings()}
+function pin(t){DB.settings.pinned_tags=DB.settings.pinned_tags||[];if(!DB.settings.pinned_tags.includes(t)){DB.settings.pinned_tags.push(t);saveSettings()}renderSettings()}
+function unpin(t){DB.settings.pinned_tags=(DB.settings.pinned_tags||[]).filter(x=>x!==t);saveSettings();renderSettings()}
+async function renameTag(t){
+  const nv=prompt('Rename tag "'+t+'" to:',t);if(!nv||nv===t)return;
+  const affected=DB.notes.filter(n=>(n.tags||[]).includes(t));
+  for(const n of affected){
+    n.tags=[...new Set(n.tags.map(x=>x===t?nv:x))];
+    await sb.from('notes').update({tags:n.tags}).eq('id',n.id);
+  }
+  if((DB.settings.pinned_tags||[]).includes(t)){DB.settings.pinned_tags=DB.settings.pinned_tags.map(x=>x===t?nv:x);saveSettings()}
+  toast(`Renamed in ${affected.length} notes`);renderSettings();
+}
+async function deleteTag(t){
+  const affected=DB.notes.filter(n=>(n.tags||[]).includes(t));
+  if(!confirm(`Remove tag "${t}" from ${affected.length} notes?`))return;
+  for(const n of affected){n.tags=n.tags.filter(x=>x!==t);await sb.from('notes').update({tags:n.tags}).eq('id',n.id)}
+  unpin(t);toast('Tag removed');renderSettings();
+}
+
+/* ================= export / import ================= */
+function dl(name,content,type){
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([content],{type:type||'application/json'}));
+  a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+}
+function exportJSON(){
+  const out={format:'notes-on-books-backup',version:1,exported_at:new Date().toISOString(),
+    people:DB.people,works:DB.works.map(w=>({...w,contributors:DB.wc.filter(c=>c.work_id===w.id).map(c=>({person_id:c.person_id,role:c.role,position:c.position}))})),
+    notes:DB.notes,purposes:DB.purposes,settings:DB.settings};
+  dl('notes-on-books-backup-'+new Date().toISOString().slice(0,10)+'.json',JSON.stringify(out,null,1));
+}
+function exportCSV(){
+  const q=s=>'"'+String(s??'').replace(/"/g,'""')+'"';
+  const rows=[['Date','Author(s)','Work','Quote','Note','Locators','Tags','Purposes','Citation (footnote)','Bibliography']];
+  DB.notes.forEach(n=>{
+    const w=W(n.work_id);
+    rows.push([(n.date_added||'').slice(0,10),w?contribs(w.id,'author').map(p=>p.name).join('; '):'',w?w.title:'',
+      stripHtml(n.quote_html),stripHtml(n.note_html),locatorStr(n.locators),(n.tags||[]).join('; '),(n.purposes||[]).join('; '),
+      citeNoteObj(n,'note').text,citeNoteObj(n,'bib').text]);
+  });
+  dl('notes-on-books-'+new Date().toISOString().slice(0,10)+'.csv','﻿'+rows.map(r=>r.map(q).join(',')).join('\r\n'),'text/csv');
+}
+async function importJSON(file){
+  if(!file)return;
+  const st=$('imp-status');
+  try{
+    const j=JSON.parse(await file.text());
+    if(j.format!=='notes-on-books-backup')throw new Error('Not a Notes on Books backup file.');
+    if(!confirm(`Import ${j.people.length} people, ${j.works.length} works, ${j.notes.length} notes? Existing records with the same IDs will be updated; nothing else is deleted.`))return;
+    st.textContent='Importing people…';
+    const clean=(o,keys)=>{const r={};keys.forEach(k=>{if(o[k]!==undefined)r[k]=o[k]});return r};
+    for(let i=0;i<j.people.length;i+=100){
+      const{error}=await sb.from('people').upsert(j.people.slice(i,i+100).map(p=>clean(p,['id','name','sort_name','dates','notes','urls','tags'])));
+      if(error)throw error;
+    }
+    st.textContent='Importing works…';
+    for(let i=0;i<j.works.length;i+=100){
+      const{error}=await sb.from('works').upsert(j.works.slice(i,i+100).map(w=>clean(w,['id','title','pub','source_status','original_work_id','review_flag','urls','tags','notes'])));
+      if(error)throw error;
+    }
+    st.textContent='Linking contributors…';
+    for(const w of j.works){
+      if(!w.contributors)continue;
+      await sb.from('work_contributors').delete().eq('work_id',w.id);
+      if(w.contributors.length){
+        const{error}=await sb.from('work_contributors').insert(w.contributors.map(c=>({work_id:w.id,person_id:c.person_id,role:c.role,position:c.position})));
+        if(error)throw error;
+      }
+    }
+    st.textContent='Importing notes…';
+    for(let i=0;i<j.notes.length;i+=100){
+      const{error}=await sb.from('notes').upsert(j.notes.slice(i,i+100).map(n=>clean(n,['id','work_id','quote_html','note_html','locators','tags','purposes','purpose_values','chapter_title','chapter_author','date_added'])));
+      if(error)throw error;
+    }
+    if(j.purposes)for(const p of j.purposes){
+      const ex=DB.purposes.find(x=>x.name===p.name);
+      if(!ex){const{error}=await sb.from('purposes').insert(clean(p,['id','name','fields','position']));if(error)throw error}
+    }
+    if(j.settings){DB.settings={...DB.settings,...j.settings};await saveSettings()}
+    st.textContent='Reloading…';
+    await loadAll();renderAll();renderSettings();
+    st.textContent='';toast('Import complete ✓');
+  }catch(e){st.textContent='Import failed: '+e.message}
+}
+
+window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue=''}});
+boot();
+</script>
+
+</body>
+</html>
