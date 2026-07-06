@@ -72,9 +72,10 @@ mark{background:var(--hl)}
 .rte p{margin:0 0 .8em}
 /* ---------- library list ---------- */
 .note-card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:10px}
-.note-card .q{font-family:var(--serif);font-size:15.5px;line-height:1.55;border-left:3px solid var(--accent2);padding-left:12px;margin:8px 0}
-.note-card .n{font-size:13.5px;line-height:1.5;color:#4a443c;margin:8px 0}
-.note-card .cite{font-family:var(--serif);font-size:12.5px;color:var(--muted)}
+.note-card .q{font-family:var(--serif);font-size:17px;line-height:1.6;border-left:3px solid var(--accent2);padding-left:12px;margin:8px 0}
+.note-card .n{font-size:15px;line-height:1.55;color:#4a443c;margin:8px 0}
+.note-card .cite{font-family:var(--serif);font-size:16.5px;font-weight:600;color:var(--ink);line-height:1.35;margin-bottom:2px}
+.note-card .meta .chip{font-size:13px}
 .note-card .meta{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px}
 .list-item{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin-bottom:8px;cursor:pointer}
 .list-item:hover{border-color:var(--accent2)}
@@ -363,8 +364,11 @@ function renderAll(){renderEditor();renderLibrary();}
 
 /* ================= editor ================= */
 function blankNote(){return{id:null,work_id:null,quote_html:'',note_html:'',locators:[],tags:[],purposes:[],purpose_values:{},chapter_title:'',chapter_author:'',date_added:new Date().toISOString()}}
-function newNote(){CUR=blankNote();nav('editor');renderEditor()}
-function editNote(id){CUR=JSON.parse(JSON.stringify(DB.notes.find(n=>n.id===id)));nav('editor');renderEditor()}
+async function newNote(){await flushSave();CUR=blankNote();nav('editor');renderEditor()}
+async function editNote(id){await flushSave();CUR=JSON.parse(JSON.stringify(DB.notes.find(n=>n.id===id)));nav('editor');renderEditor()}
+const tagChip=t=>`<span class="chip on">${esc(t)}<span class="x" onclick="rmTag('${esc(t).replace(/'/g,"\\'")}')">×</span></span>`;
+const pinChip=t=>`<span class="chip ${CUR.tags.includes(t)?'on':''}" onclick="toggleTag('${esc(t).replace(/'/g,"\\'")}')">${esc(t)}</span>`;
+const locChip=(l,i)=>`<span class="chip">${esc(LOC_TYPES[l.type]||l.type)}: ${esc(l.value)}<span class="x" onclick="rmLoc(${i})">×</span></span>`;
 
 function renderEditor(){
   if(!CUR)CUR=blankNote();
@@ -375,10 +379,10 @@ function renderEditor(){
   const workOpts=worksOf.map(x=>`<option value="${x.id}" ${x.id===CUR.work_id?'selected':''}>${esc(x.title)}</option>`).join('');
   const c=w?citeWork(w,{form:'note',locators:CUR.locators,chapter_title:CUR.chapter_title,chapter_author:CUR.chapter_author}):{html:'<span class="muted">No work selected — choose or create one.</span>'};
   const surrogate=w&&w.source_status!=='published';
-  const pinned=(DB.settings.pinned_tags||[]).map(t=>`<span class="chip ${CUR.tags.includes(t)?'on':''}" onclick="toggleTag('${esc(t).replace(/'/g,"\\'")}')">${esc(t)}</span>`).join('');
-  const curTags=CUR.tags.map(t=>`<span class="chip on">${esc(t)}<span class="x" onclick="rmTag('${esc(t).replace(/'/g,"\\'")}')">×</span></span>`).join('');
+  const pinned=(DB.settings.pinned_tags||[]).map(pinChip).join('');
+  const curTags=CUR.tags.map(tagChip).join('');
   const purpChips=DB.purposes.map(p=>`<span class="chip ${CUR.purposes.includes(p.name)?'on':''}" onclick="togglePurpose('${esc(p.name).replace(/'/g,"\\'")}')">${esc(p.name)}</span>`).join('');
-  const locRows=(CUR.locators||[]).map((l,i)=>`<span class="chip">${esc(LOC_TYPES[l.type]||l.type)}: ${esc(l.value)}<span class="x" onclick="rmLoc(${i})">×</span></span>`).join('');
+  const locRows=(CUR.locators||[]).map(locChip).join('');
   $('view-editor').innerHTML=`
   <div id="ribbon">
     <div class="rib-row">
@@ -400,9 +404,9 @@ function renderEditor(){
       </div></div>
     </div>
     <div class="rib-row">
-      <div class="fieldcol"><label>Locators</label><div class="row">${locRows}
+      <div class="fieldcol"><label>Locators</label><div class="row"><span id="loc-chips" class="row">${locRows}</span>
         <select id="loc-type">${Object.entries(LOC_TYPES).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select>
-        <input id="loc-val" placeholder="value" style="width:110px" onkeydown="if(event.key==='Enter')addLoc()">
+        <input id="loc-val" placeholder="value" style="width:110px" onkeydown="if(event.key==='Enter'){event.preventDefault();addLoc()}" onblur="setTimeout(addLoc,120)">
         <button class="btn sm sec" onclick="addLoc()">Add</button></div></div>
       <div class="fieldcol"><label>Chapter (edited volumes)</label><div class="row">
         <input id="ed-chtitle" placeholder="Chapter title" value="${esc(CUR.chapter_title)}" onchange="CUR.chapter_title=this.value;refreshCite()" style="width:170px">
@@ -412,8 +416,8 @@ function renderEditor(){
     <div id="purpose-fields"></div>
     <div class="rib-row">
       <div class="fieldcol" style="flex:1"><label>Tags</label><div class="row">
-        ${pinned}${pinned?'<span style="border-left:1px solid var(--line);height:20px"></span>':''}${curTags}
-        <input id="tag-in" list="tag-list" placeholder="add tag…" style="width:130px" onkeydown="if(event.key==='Enter'){addTagFromInput()}" onchange="addTagFromInput()">
+        <span id="pin-tags" class="row">${pinned}</span><span style="border-left:1px solid var(--line);height:20px"></span><span id="cur-tags" class="row">${curTags}</span>
+        <input id="tag-in" list="tag-list" placeholder="add tag… (Enter)" style="width:140px" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();addTagFromInput()}">
         <datalist id="tag-list">${allTags().map(t=>`<option value="${esc(t)}">`).join('')}</datalist>
       </div></div>
     </div>
@@ -425,14 +429,15 @@ function renderEditor(){
       <div class="rte" id="rte-n" contenteditable="true" data-ph="Your thoughts on this passage…"></div></div>
   </div>
   <div class="row" style="margin-top:12px">
-    <button class="btn" onclick="saveNote()">💾 Save note</button>
+    <button class="btn" onclick="saveNote()">💾 Save now</button>
     <button class="btn sec" onclick="newNote()">New</button>
     ${CUR.id?'<button class="btn danger" onclick="deleteNote()">Delete</button>':''}
-    <span class="muted small">${CUR.id?'Editing existing note':'New note'} · ${new Date(CUR.date_added).toLocaleDateString()}</span>
+    <span class="muted small">${CUR.id?'Editing existing note':'New note'} · autosaves as you type · ${new Date(CUR.date_added).toLocaleDateString()}</span>
+    <span id="save-status" class="muted small"></span>
   </div>`;
   $('rte-q').innerHTML=CUR.quote_html||'';
   $('rte-n').innerHTML=CUR.note_html||'';
-  ['q','n'].forEach(k=>$('rte-'+k).addEventListener('input',()=>{dirty=true}));
+  ['q','n'].forEach(k=>$('rte-'+k).addEventListener('input',()=>{dirty=true;scheduleSave()}));
   renderPurposeFields();
 }
 function rteBar(k){
@@ -440,7 +445,8 @@ function rteBar(k){
   return b('bold','<b>B</b>')+b('italic','<i>I</i>')+b('underline','<u>U</u>')+
     `<button class="tbtn" style="background:var(--hl)" onmousedown="event.preventDefault();fmt('hiliteColor','','#fdf0a8')" title="highlight">✺</button>`+
     `<button class="tbtn" onmousedown="event.preventDefault();fmt('hiliteColor','','transparent')" title="remove highlight">⌫✺</button>`+
-    `<button class="tbtn" onmousedown="event.preventDefault();fmt('removeFormat')" title="clear formatting">Tx</button>`;
+    `<button class="tbtn" onmousedown="event.preventDefault();fmt('removeFormat')" title="clear formatting">Tx</button>`+
+    `<button class="tbtn" onclick="openCleanup('${k}')" title="clean up pasted text">🧹</button>`;
 }
 function fmt(cmd,_,arg){document.execCommand(cmd,false,arg||null)}
 function syncPanes(){CUR.quote_html=$('rte-q').innerHTML;CUR.note_html=$('rte-n').innerHTML}
@@ -449,15 +455,18 @@ function refreshCite(){
   const w=W(CUR.work_id);
   const c=w?citeWork(w,{form:'note',locators:CUR.locators,chapter_title:CUR.chapter_title,chapter_author:CUR.chapter_author}):{html:'<span class="muted">No work selected.</span>'};
   const el=$('cite-preview');if(el)el.innerHTML=c.html;
+  scheduleSave();
 }
 function pickAuthor(pid){syncPanes();CUR._authorSel=pid||null;if(pid){const wks=DB.works.filter(x=>DB.wc.some(c=>c.work_id===x.id&&c.person_id===pid));if(!wks.some(x=>x.id===CUR.work_id))CUR.work_id=wks.length===1?wks[0].id:null}renderEditor()}
-function pickWork(wid){syncPanes();CUR.work_id=wid||null;renderEditor()}
-function toggleTag(t){syncPanes();CUR.tags.includes(t)?CUR.tags=CUR.tags.filter(x=>x!==t):CUR.tags.push(t);renderEditor()}
-function rmTag(t){syncPanes();CUR.tags=CUR.tags.filter(x=>x!==t);renderEditor()}
-function addTagFromInput(){const v=$('tag-in').value.trim();if(!v)return;$('tag-in').value='';if(!CUR.tags.includes(v)){syncPanes();CUR.tags.push(v);renderEditor();setTimeout(()=>$('tag-in')&&$('tag-in').focus(),50)}}
-function togglePurpose(name){syncPanes();CUR.purposes.includes(name)?CUR.purposes=CUR.purposes.filter(x=>x!==name):CUR.purposes.push(name);renderEditor()}
-function addLoc(){const t=$('loc-type').value,v=$('loc-val').value.trim();if(!v)return;syncPanes();CUR.locators.push({type:t,value:v});renderEditor()}
-function rmLoc(i){syncPanes();CUR.locators.splice(i,1);renderEditor()}
+function pickWork(wid){syncPanes();CUR.work_id=wid||null;renderEditor();scheduleSave()}
+function updateTagsRow(){const p=$('pin-tags'),c=$('cur-tags');if(p)p.innerHTML=(DB.settings.pinned_tags||[]).map(pinChip).join('');if(c)c.innerHTML=CUR.tags.map(tagChip).join('');scheduleSave()}
+function toggleTag(t){CUR.tags.includes(t)?CUR.tags=CUR.tags.filter(x=>x!==t):CUR.tags.push(t);updateTagsRow()}
+function rmTag(t){CUR.tags=CUR.tags.filter(x=>x!==t);updateTagsRow()}
+function addTagFromInput(){const el=$('tag-in');if(!el)return;const v=el.value.trim();if(!v)return;el.value='';if(!CUR.tags.includes(v))CUR.tags.push(v);updateTagsRow();el.focus()}
+function togglePurpose(name){syncPanes();CUR.purposes.includes(name)?CUR.purposes=CUR.purposes.filter(x=>x!==name):CUR.purposes.push(name);renderEditor();scheduleSave()}
+function updateLocRow(){const el=$('loc-chips');if(el)el.innerHTML=(CUR.locators||[]).map(locChip).join('');refreshCite()}
+function addLoc(){const tEl=$('loc-type'),vEl=$('loc-val');if(!tEl||!vEl)return;const v=vEl.value.trim();if(!v)return;vEl.value='';CUR.locators.push({type:tEl.value,value:v});updateLocRow()}
+function rmLoc(i){CUR.locators.splice(i,1);updateLocRow()}
 function renderPurposeFields(){
   const host=$('purpose-fields');if(!host)return;
   let h='';
@@ -478,10 +487,13 @@ function renderPurposeFields(){
 }
 function setPV(pn,key,val){if(!CUR.purpose_values)CUR.purpose_values={};if(!CUR.purpose_values[pn])CUR.purpose_values[pn]={};CUR.purpose_values[pn][key]=val}
 function copyCur(mode){syncPanes();copyNote(CUR,mode)}
-async function saveNote(){
+let saveTimer=null;
+function scheduleSave(){if(!CUR)return;clearTimeout(saveTimer);const st=$('save-status');if(st)st.textContent='· unsaved…';saveTimer=setTimeout(()=>saveNote(true),1200)}
+async function flushSave(){if(saveTimer){clearTimeout(saveTimer);saveTimer=null;if(CUR)await saveNote(true)}}
+async function saveNote(auto){
+  clearTimeout(saveTimer);saveTimer=null;
   syncPanes();
-  if(!CUR.work_id&&!confirm('No work selected — save anyway?'))return;
-  if(!stripHtml(CUR.quote_html).trim()&&!stripHtml(CUR.note_html).trim()){toast('Nothing to save');return}
+  if(!stripHtml(CUR.quote_html).trim()&&!stripHtml(CUR.note_html).trim()){if(!auto)toast('Nothing to save');return}
   const rec={work_id:CUR.work_id,quote_html:CUR.quote_html,note_html:CUR.note_html,locators:CUR.locators,tags:CUR.tags,purposes:CUR.purposes,purpose_values:CUR.purpose_values,chapter_title:CUR.chapter_title,chapter_author:CUR.chapter_author,updated_at:new Date().toISOString()};
   if(CUR.id){
     const{error}=await sb.from('notes').update(rec).eq('id',CUR.id);
@@ -493,7 +505,9 @@ async function saveNote(){
     if(error){toast(error.message);return}
     DB.notes.unshift(data);CUR.id=data.id;
   }
-  dirty=false;toast('Saved');renderEditor();
+  dirty=false;
+  const st=$('save-status');if(st)st.textContent='· saved ✓';
+  if(!auto){toast('Saved');renderEditor()}
 }
 async function deleteNote(){
   if(!confirm('Delete this note permanently?'))return;
@@ -527,7 +541,8 @@ function renderWorkModal(){
   <label>Citation parser — paste a full citation and I'll split it into fields</label>
   <div class="row"><input id="cp-in" style="flex:1" placeholder='e.g. John Owen, Overcoming Sin and Temptation (Wheaton: Crossway, 2006)'>
   <button class="btn sm sec" onclick="parseCitation()">Parse</button>
-  <button class="btn sm sec" onclick="lookupOnline()">🔎 Look up online</button></div>
+  <button class="btn sm sec" onclick="lookupOnline()">🔎 Look up online</button>
+  <button class="btn sm sec" onclick="fetchUrlMeta()">🔗 From URL</button></div>
   <div id="cp-sugg"></div>
   <label>Title</label><input id="mw-title" style="width:100%" value="${esc(MW.title)}" onchange="MW.title=this.value">
   ${roleRow('author',MW._authors)}${roleRow('editor',MW._editors)}${roleRow('translator',MW._translators)}
@@ -584,26 +599,54 @@ function parseCitation(){
   $('cp-sugg').innerHTML='<div class="sugg" style="cursor:default">Parsed what I could — please review the fields below, then use 🔎 to verify online if needed.</div>';
 }
 async function lookupOnline(){
-  const q=[MW.title,(MW._authors[0]||'')].filter(Boolean).join(' ')||$('cp-in').value.trim();
+  const title=(MW.title||'').trim(), author=(MW._authors[0]||'').trim();
+  const q=[title,author].filter(Boolean).join(' ')||$('cp-in').value.trim();
   if(!q){toast('Enter a title first');return}
-  $('cp-sugg').innerHTML='<div class="sugg" style="cursor:default">Searching Open Library…</div>';
-  try{
-    const r=await fetch('https://openlibrary.org/search.json?limit=5&q='+encodeURIComponent(q));
-    const j=await r.json();
-    if(!j.docs||!j.docs.length){$('cp-sugg').innerHTML='<div class="sugg" style="cursor:default">No matches found.</div>';return}
-    $('cp-sugg').innerHTML=j.docs.map((d,i)=>`<div class="sugg" onclick='applySugg(${i})'>
-      <b>${esc(d.title||'')}</b> — ${esc((d.author_name||[]).join(', '))}<br>
-      <span class="muted">${esc((d.publisher||[])[0]||'')} ${esc(String(d.first_publish_year||''))}</span></div>`).join('');
-    window._suggs=j.docs;
-  }catch(e){$('cp-sugg').innerHTML='<div class="sugg" style="cursor:default">Lookup failed: '+esc(e.message)+'</div>'}
+  $('cp-sugg').innerHTML='<div class="sugg" style="cursor:default">Searching Open Library and Google Books…</div>';
+  const suggs=[];
+  const ol=fetch('https://openlibrary.org/search.json?limit=4&q='+encodeURIComponent(q)).then(r=>r.json()).then(j=>{
+    (j.docs||[]).forEach(d=>suggs.push({src:'Open Library',title:d.title||'',subtitle:'',authors:d.author_name||[],publisher:(d.publisher||[])[0]||'',year:d.first_publish_year?String(d.first_publish_year):''}))});
+  const gq=title?('intitle:'+title+(author?' inauthor:'+author:'')):q;
+  const gb=fetch('https://www.googleapis.com/books/v1/volumes?maxResults=4&q='+encodeURIComponent(gq)).then(r=>r.json()).then(j=>{
+    (j.items||[]).forEach(it=>{const v=it.volumeInfo||{};suggs.push({src:'Google Books',title:v.title||'',subtitle:v.subtitle||'',authors:v.authors||[],publisher:v.publisher||'',year:(v.publishedDate||'').slice(0,4)})})});
+  await Promise.allSettled([ol,gb]);
+  if(!suggs.length){$('cp-sugg').innerHTML='<div class="sugg" style="cursor:default">No matches in either source.</div>';return}
+  window._suggs=suggs;
+  $('cp-sugg').innerHTML=suggs.map((d,i)=>`<div class="sugg" onclick="applySugg(${i})">
+    <b>${esc(d.title)}${d.subtitle?': '+esc(d.subtitle):''}</b> — ${esc(d.authors.join(', '))}<br>
+    <span class="muted">${esc(d.publisher)} ${esc(d.year)} · via ${d.src}</span></div>`).join('');
 }
 function applySugg(i){
   const d=window._suggs[i];
-  if(d.title)MW.title=d.title;
-  if(d.author_name)MW._authors=[...new Set([...(d.author_name.slice(0,3))])];
-  if(d.publisher&&d.publisher[0])MW.pub.publisher=d.publisher[0];
-  if(d.first_publish_year&&!MW.pub.year)MW.pub.year=String(d.first_publish_year);
+  if(d.title)MW.title=d.title+(d.subtitle?': '+d.subtitle:'');
+  if(d.authors&&d.authors.length)MW._authors=[...new Set(d.authors.slice(0,3))];
+  if(d.publisher)MW.pub.publisher=d.publisher;
+  if(d.year)MW.pub.year=d.year;
   renderWorkModal();
+}
+async function fetchUrlMeta(){
+  let url=(MW.urls&&MW.urls[0])||prompt('Paste the URL to read metadata from:');
+  if(!url)return;
+  if(!/^https?:\/\//.test(url))url='https://'+url;
+  $('cp-sugg').innerHTML='<div class="sugg" style="cursor:default">Reading page…</div>';
+  let html=null;
+  try{const r=await fetch(url);if(r.ok)html=await r.text()}catch(e){}
+  if(!html){try{const r=await fetch('https://corsproxy.io/?url='+encodeURIComponent(url));if(r.ok)html=await r.text()}catch(e){}}
+  if(!html){$('cp-sugg').innerHTML='<div class="sugg" style="cursor:default">That site blocks cross-site reading — nothing retrieved. Try the 🔎 lookup instead.</div>';return}
+  const doc=new DOMParser().parseFromString(html,'text/html');
+  const meta=n=>{const el=doc.querySelector('meta[name="'+n+'"],meta[property="'+n+'"]');return(el&&el.getAttribute('content'))||''};
+  const found=[];
+  const t=meta('citation_title')||meta('og:title')||(doc.querySelector('title')?doc.querySelector('title').textContent.trim():'');
+  const a=meta('citation_author')||meta('author');
+  const pub=meta('citation_publisher')||meta('DC.publisher')||meta('og:site_name');
+  const yr=(meta('citation_publication_date')||meta('citation_date')||meta('DC.date')||'').slice(0,4);
+  if(t&&!MW.title){MW.title=t;found.push('title')}
+  if(a&&!MW._authors.length){MW._authors.push(a);found.push('author')}
+  if(pub&&!MW.pub.publisher){MW.pub.publisher=pub;found.push('publisher')}
+  if(/^\d{4}$/.test(yr)&&!MW.pub.year){MW.pub.year=yr;found.push('year')}
+  if(!MW.urls.includes(url))MW.urls.push(url);
+  renderWorkModal();
+  $('cp-sugg').innerHTML='<div class="sugg" style="cursor:default">'+(found.length?'Filled empty fields: '+found.join(', ')+'. Existing values left untouched.':'Page read, but no usable metadata found.')+'</div>';
 }
 async function ensurePerson(name){
   const k=name.toLowerCase();
@@ -839,6 +882,11 @@ function renderSettings(){
        <button class="btn sm sec" onclick="deleteTag('${esc(t).replace(/'/g,"\\'")}')">Delete</button></td></tr>`).join('')}</table>
   </div>
   <div class="card set-section">
+    <h3>Text cleanup rules</h3>
+    <p class="small muted">Applied from the 🧹 button on the quote/notes panes in the editor. Create new rules there too.</p>
+    ${(DB.settings.cleanup_rules||[]).map((r,i)=>`<div class="row" style="margin:4px 0;border-bottom:1px solid var(--line);padding-bottom:4px"><b class="small">${esc(r.name)}</b><span class="small muted">replace ${esc(JSON.stringify(r.find))} with ${esc(JSON.stringify(r.replace))}${r.regex?' (regex)':''}</span><span style="flex:1"></span><button class="btn sm sec" onclick="delCleanRule(${i})">Delete</button></div>`).join('')||'<p class="small muted">No custom rules yet.</p>'}
+  </div>
+  <div class="card set-section">
     <h3>Backup & data</h3>
     <p class="small muted">Export everything, or restore/import from a backup JSON. Drop exports into your Google Drive for safekeeping.</p>
     <div class="row">
@@ -850,7 +898,7 @@ function renderSettings(){
   </div>
   <div class="card set-section">
     <h3>Account</h3>
-    <p class="small muted">${esc((USER&&USER.email)||'')}</p>
+    <p class="small muted">${esc((USER&&USER.email)||'')} · Notes on Books v1.1</p>
     <button class="btn sec" onclick="sb.auth.signOut().then(()=>location.reload())">Sign out</button>
   </div>`;
 }
@@ -980,6 +1028,45 @@ async function importJSON(file){
     st.textContent='';toast('Import complete ✓');
   }catch(e){st.textContent='Import failed: '+e.message}
 }
+
+/* ================= text cleanup ================= */
+function openCleanup(k){
+  syncPanes();
+  const rules=DB.settings.cleanup_rules||[];
+  const show=v=>esc(JSON.stringify(v));
+  $('modal').innerHTML=`<h3>Clean up ${k==='q'?'quote':'notes'} text</h3>
+   <div class="sugg" onclick="runClean('${k}','spaces')"><b>Collapse repeated spaces</b><br><span class="muted">Fixes PDF paste artifacts — runs of 2+ spaces become one</span></div>
+   <div class="sugg" onclick="runClean('${k}','linkify')"><b>Bare URLs → small 🔗 links</b><br><span class="muted">Restores readability but keeps each link clickable</span></div>
+   <div class="sugg" onclick="runClean('${k}','strip_urls')"><b>Remove bare URLs entirely</b></div>
+   ${rules.map((r,i)=>`<div class="sugg" onclick="runClean('${k}',${i})"><b>${esc(r.name)}</b><br><span class="muted">replace ${show(r.find)} with ${show(r.replace)}${r.regex?' (regex)':''}</span></div>`).join('')}
+   <div class="row" style="margin-top:10px">
+     <button class="btn sm sec" onclick="newCleanRule('${k}')">+ New rule</button>
+     <span class="muted small">Rules can be deleted in Settings</span>
+     <span style="flex:1"></span><button class="btn sm sec" onclick="closeModal()">Close</button>
+   </div>`;
+  $('modal-bg').classList.remove('hidden');
+}
+function runClean(k,which){
+  const el=$('rte-'+k);if(!el)return;
+  let h=el.innerHTML.replace(/&nbsp;/g,' ');
+  const urlPat=/(^|[^"'=\w])(https?:\/\/[^\s<)"']+)(?![^<]*>)/g;
+  if(which==='spaces')h=h.replace(/ {2,}/g,' ');
+  else if(which==='linkify')h=h.replace(urlPat,'$1<a href="$2" target="_blank">🔗</a>');
+  else if(which==='strip_urls')h=h.replace(urlPat,'$1');
+  else{const r=(DB.settings.cleanup_rules||[])[which];if(!r)return;
+    const pat=r.regex?new RegExp(r.find,'g'):new RegExp(r.find.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'g');
+    h=h.replace(pat,r.replace)}
+  el.innerHTML=h;syncPanes();scheduleSave();closeModal();toast('Cleaned');
+}
+function newCleanRule(k){
+  const name=prompt('Rule name (e.g. “Fix six spaces”):');if(!name)return;
+  const find=prompt('Find — type or paste the exact text to find (spaces count!):');if(!find)return;
+  const replace=prompt('Replace with (leave blank to delete matches):','');if(replace===null)return;
+  DB.settings.cleanup_rules=DB.settings.cleanup_rules||[];
+  DB.settings.cleanup_rules.push({name:name.trim(),find,replace,regex:false});
+  saveSettings();openCleanup(k);toast('Rule saved');
+}
+function delCleanRule(i){DB.settings.cleanup_rules.splice(i,1);saveSettings();renderSettings()}
 
 window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue=''}});
 boot();
