@@ -63,7 +63,7 @@ mark{background:var(--hl)}
 /* ---------- panes ---------- */
 #panes{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .pane{background:var(--panel);border:1px solid var(--line);border-radius:12px;display:flex;flex-direction:column;min-height:300px}
-.pane-head{display:flex;align-items:center;gap:6px;padding:7px 10px;border-bottom:1px solid var(--line)}
+.pane-head{display:flex;align-items:center;gap:6px;padding:7px 10px;border-bottom:1px solid var(--line);position:sticky;top:var(--appbar-h,48px);z-index:15;background:var(--panel);border-radius:12px 12px 0 0}
 .pane-head .ttl{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);flex:1}
 .tbtn{border:1px solid var(--line);background:#fff;border-radius:6px;min-width:30px;height:28px;font-size:13px;padding:0 7px}
 .tbtn:hover{background:var(--chip)}
@@ -103,6 +103,9 @@ table.tags td{border-bottom:1px solid var(--line);padding:6px 8px;font-size:13.5
 #rte-n,#rte-n *{font-family:var(--nfont)!important;font-size:var(--nsize)!important;line-height:1.55!important}
 .note-card .q,.note-card .q *{font-family:var(--qfont)!important;font-size:var(--qsize)!important;line-height:1.6!important}
 .note-card .n,.note-card .n *{font-family:var(--nfont)!important;font-size:var(--nsize)!important;line-height:1.55!important}
+.ac-box{position:fixed;z-index:70;background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.15);max-height:220px;overflow-y:auto;font-size:13.5px}
+.ac-item{padding:7px 12px;cursor:pointer}
+.ac-item:hover,.ac-item.on{background:var(--chip)}
 .sugg{border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:6px 0;font-size:13px;cursor:pointer}
 .sugg:hover{background:var(--chip)}
 .warn{background:#fbeee7;border:1px solid #e8c9b4;border-radius:8px;padding:8px 12px;font-size:13px;color:#7a4a28;margin:6px 0}
@@ -179,7 +182,50 @@ const esc=s=>(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"
 const stripHtml=h=>{const d=document.createElement('div');d.innerHTML=h||'';return d.textContent||''};
 const toast=m=>{const t=$('toast');t.textContent=m;t.classList.remove('hidden');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.add('hidden'),2600)};
 
+/* ================= generic autocomplete (replaces native <datalist>, which is unreliable on iOS Safari) ================= */
+function makeAutocomplete(inputEl,getOptions,opts){
+  opts=opts||{};
+  let box=null,items=[],idx=-1;
+  function close(){if(box){box.remove();box=null}idx=-1}
+  function highlight(){if(box)[...box.children].forEach((c,i)=>c.classList.toggle('on',i===idx))}
+  function position(){
+    if(!box)return;
+    const r=inputEl.getBoundingClientRect();
+    box.style.left=Math.round(r.left)+'px';
+    box.style.top=Math.round(r.bottom+3)+'px';
+    box.style.minWidth=Math.round(r.width)+'px';
+  }
+  function pick(val){inputEl.value=val;close();if(opts.onPick)opts.onPick(val)}
+  function renderBox(){
+    close();
+    const q=inputEl.value.trim().toLowerCase();
+    const all=getOptions()||[];
+    items=(q?all.filter(t=>t.toLowerCase().includes(q)):all).slice(0,8);
+    if(!items.length)return;
+    box=document.createElement('div');box.className='ac-box';
+    items.forEach(t=>{const row=document.createElement('div');row.className='ac-item';row.textContent=t;row.onmousedown=e=>{e.preventDefault();pick(t)};box.appendChild(row)});
+    document.body.appendChild(box);position();
+  }
+  inputEl.addEventListener('input',renderBox);
+  inputEl.addEventListener('focus',renderBox);
+  inputEl.addEventListener('blur',()=>setTimeout(close,150));
+  inputEl.addEventListener('keydown',e=>{
+    if(e.key==='ArrowDown'&&box){e.preventDefault();idx=Math.min(idx+1,items.length-1);highlight()}
+    else if(e.key==='ArrowUp'&&box){e.preventDefault();idx=Math.max(idx-1,0);highlight()}
+    else if(e.key==='Escape'){close()}
+    else if(e.key==='Enter'){
+      if(box&&idx>=0&&items[idx]){e.preventDefault();pick(items[idx]);return}
+      close();
+      if(opts.onEnter){e.preventDefault();const v=inputEl.value.trim();if(v){opts.onEnter(v)}}
+    }
+  });
+  window.addEventListener('resize',position);
+}
+function syncAppbarHeight(){const b=$('appbar');if(b)document.documentElement.style.setProperty('--appbar-h',b.offsetHeight+'px')}
+window.addEventListener('resize',syncAppbarHeight);
+
 function boot(){
+  syncAppbarHeight();
   const url=localStorage.getItem('nob_url'), key=localStorage.getItem('nob_key');
   if(!url||!key){show('setup');return}
   sb=window.supabase.createClient(url,key);
@@ -188,7 +234,7 @@ function boot(){
     else show('auth');
   });
 }
-function show(v){const sp=$('splash');if(sp)sp.classList.add('hidden');['view-setup','view-auth','app'].forEach(x=>$(x).classList.add('hidden'));$(v==='app'?'app':'view-'+v).classList.remove('hidden')}
+function show(v){const sp=$('splash');if(sp)sp.classList.add('hidden');['view-setup','view-auth','app'].forEach(x=>$(x).classList.add('hidden'));$(v==='app'?'app':'view-'+v).classList.remove('hidden');if(v==='app')setTimeout(syncAppbarHeight,0)}
 function saveSetup(){
   const u=$('su-url').value.trim().replace(/\/$/,''), k=$('su-key').value.trim();
   if(!/^https:\/\/.+supabase\.(co|in)/.test(u)||!k){alert('Please paste both the project URL and the anon key.');return}
@@ -416,8 +462,8 @@ const locChip=(l,i)=>`<span class="chip">${esc(LOC_TYPES[l.type]||l.type)}: ${es
 function renderEditor(){
   if(!CUR)CUR=blankNote();
   const w=W(CUR.work_id);
-  const authorOpts=DB.people.map(p=>`<option value="${p.id}">${esc(invertName(p))}</option>`).join('');
   const selAuthor=w?(contribs(w.id,'author')[0]||contribs(w.id,'editor')[0]||{}).id:CUR._authorSel;
+  const authorOpts=DB.people.map(p=>`<option value="${p.id}" ${p.id===selAuthor?'selected':''}>${esc(invertName(p))}</option>`).join('');
   const worksOf=selAuthor?DB.works.filter(x=>DB.wc.some(c=>c.work_id===x.id&&c.person_id===selAuthor)):DB.works;
   const workOpts=worksOf.map(x=>`<option value="${x.id}" ${x.id===CUR.work_id?'selected':''}>${esc(x.title)}</option>`).join('');
   const c=w?citeWork(w,{form:'note',locators:CUR.locators,chapter_title:CUR.chapter_title,chapter_author:CUR.chapter_author}):{html:'<span class="muted">No work selected — choose or create one.</span>'};
@@ -460,8 +506,7 @@ function renderEditor(){
     <div class="rib-row">
       <div class="fieldcol" style="flex:1"><label>Tags</label><div class="row">
         <span id="pin-tags" class="row">${pinned}</span><span style="border-left:1px solid var(--line);height:20px"></span><span id="cur-tags" class="row">${curTags}</span>
-        <input id="tag-in" list="tag-list" placeholder="add tag… (Enter)" style="width:140px" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();addTagFromInput()}">
-        <datalist id="tag-list">${allTags().map(t=>`<option value="${esc(t)}">`).join('')}</datalist>
+        <input id="tag-in" placeholder="add tag… (Enter)" style="width:140px" autocomplete="off">
       </div></div>
     </div>
   </div>
@@ -480,8 +525,17 @@ function renderEditor(){
   </div>`;
   $('rte-q').innerHTML=CUR.quote_html||'';
   $('rte-n').innerHTML=CUR.note_html||'';
-  ['q','n'].forEach(k=>{const el=$('rte-'+k);el.addEventListener('input',()=>{dirty=true;scheduleSave()});el.addEventListener('paste',sanitizePaste)});
+  ['q','n'].forEach(k=>{const el=$('rte-'+k);el.addEventListener('input',()=>{dirty=true;scheduleSave()});el.addEventListener('paste',sanitizePaste);el.addEventListener('keydown',rteShortcut)});
   renderPurposeFields();
+  const tagIn=$('tag-in');if(tagIn)makeAutocomplete(tagIn,allTags,{onEnter:v=>{tagIn.value=v;addTagFromInput()}});
+}
+function rteShortcut(e){
+  const mod=e.metaKey||e.ctrlKey;
+  if(!mod)return;
+  const k=e.key.toLowerCase();
+  if(k==='b'){e.preventDefault();fmt('bold')}
+  else if(k==='i'){e.preventDefault();fmt('italic')}
+  else if(k==='u'){e.preventDefault();fmt('underline')}
 }
 function sanitizePaste(e){
   e.preventDefault();
@@ -519,7 +573,7 @@ function rteBar(k){
     `<button class="tbtn" style="background:var(--hl)" onmousedown="event.preventDefault();fmt('hiliteColor','','#fdf0a8')" title="highlight">✺</button>`+
     `<button class="tbtn" onmousedown="event.preventDefault();fmt('hiliteColor','','transparent')" title="remove highlight">⌫✺</button>`+
     `<button class="tbtn" onmousedown="event.preventDefault();fmt('removeFormat')" title="clear formatting">Tx</button>`+
-    `<button class="tbtn" onclick="openCleanup('${k}')" title="clean up pasted text">🧹</button>`;
+    `<button class="tbtn" onmousedown="event.preventDefault();captureSelAndOpenCleanup('${k}')" title="clean up pasted text">🧹</button>`;
 }
 function fmt(cmd,_,arg){document.execCommand(cmd,false,arg||null)}
 function syncPanes(){CUR.quote_html=$('rte-q').innerHTML;CUR.note_html=$('rte-n').innerHTML}
@@ -602,11 +656,10 @@ function openWorkModal(wid){
 }
 function renderWorkModal(){
   const pub=MW.pub||{};
-  const peopleList='<datalist id="ppl-list">'+DB.people.map(p=>`<option value="${esc(p.name)}">`).join('')+'</datalist>';
   const roleRow=(role,arr)=>`<div class="row" style="margin:2px 0">
      <span class="small muted" style="width:80px;text-transform:capitalize">${role}s</span>
      ${arr.map((n,i)=>`<span class="chip on">${esc(n)}<span class="x" onclick="MW._${role}s.splice(${i},1);renderWorkModal()">×</span></span>`).join('')}
-     <input list="ppl-list" placeholder="add ${role}…" style="width:140px" onkeydown="if(event.key==='Enter'){addRole('${role}',this.value);this.value=''}" onchange="addRole('${role}',this.value);this.value=''"></div>`;
+     <input id="role-in-${role}" placeholder="add ${role}…" style="width:140px"></div>`;
   const origOpts=DB.works.filter(x=>x.id!==MW.id).map(x=>`<option value="${x.id}" ${x.id===MW.original_work_id?'selected':''}>${esc(x.title)}</option>`).join('');
   $('modal').innerHTML=`
   <h3>${MW.id?'Edit work':'New work'}</h3>
@@ -649,6 +702,10 @@ function renderWorkModal(){
     ${MW.id?'<button class="btn danger" onclick="deleteWork()">Delete</button>':''}
   </div>`;
   $('modal-bg').classList.remove('hidden');
+  ['author','editor','translator'].forEach(role=>{
+    const el=$('role-in-'+role);if(!el)return;
+    makeAutocomplete(el,()=>DB.people.map(p=>p.name),{onEnter:v=>{addRole(role,v)}});
+  });
 }
 function addRole(role,name){name=(name||'').trim();if(!name)return;MW['_'+role+'s'].push(name);renderWorkModal()}
 function closeModal(){$('modal-bg').classList.add('hidden')}
@@ -775,14 +832,14 @@ async function deleteWork(){
 
 <script>
 /* ================= library ================= */
-let LIB={q:'',inQ:true,inN:true,inT:true,tags:[],purpose:'',work:'',person:'',sort:'new',selMode:false,sel:new Set()};
+let LIB={q:'',inQ:true,inN:true,inT:true,tags:[],purpose:'',work:'',person:'',sort:'new',selMode:false,sel:new Set(),pf:{}};
 try{const _ls=JSON.parse(localStorage.getItem('nob_lib')||'null');if(_ls){Object.assign(LIB,_ls);LIB.sel=new Set();LIB.selMode=false}}catch(e){}
-function saveLibState(){try{localStorage.setItem('nob_lib',JSON.stringify({q:LIB.q,inQ:LIB.inQ,inN:LIB.inN,inT:LIB.inT,tags:LIB.tags,purpose:LIB.purpose,work:LIB.work,person:LIB.person,sort:LIB.sort}))}catch(e){}}
-function libSnapshot(){return{q:LIB.q,inQ:LIB.inQ,inN:LIB.inN,inT:LIB.inT,tags:[...LIB.tags],purpose:LIB.purpose,work:LIB.work,person:LIB.person,sort:LIB.sort}}
-function applyView(id){if(!id)return;const v=(DB.settings.saved_filters||[]).find(x=>x.id===id);if(!v)return;Object.assign(LIB,JSON.parse(JSON.stringify(v.filters)));LIB.sel=new Set();renderLibrary()}
+function saveLibState(){try{localStorage.setItem('nob_lib',JSON.stringify({q:LIB.q,inQ:LIB.inQ,inN:LIB.inN,inT:LIB.inT,tags:LIB.tags,purpose:LIB.purpose,work:LIB.work,person:LIB.person,sort:LIB.sort,pf:LIB.pf}))}catch(e){}}
+function libSnapshot(){return{q:LIB.q,inQ:LIB.inQ,inN:LIB.inN,inT:LIB.inT,tags:[...LIB.tags],purpose:LIB.purpose,work:LIB.work,person:LIB.person,sort:LIB.sort,pf:JSON.parse(JSON.stringify(LIB.pf||{}))}}
+function applyView(id){if(!id)return;const v=(DB.settings.saved_filters||[]).find(x=>x.id===id);if(!v)return;Object.assign(LIB,JSON.parse(JSON.stringify(v.filters)));if(!LIB.pf)LIB.pf={};LIB.sel=new Set();renderLibrary()}
 function saveView(){const name=prompt('Name this view (current search, filters, and sort will be saved):');if(!name)return;DB.settings.saved_filters=DB.settings.saved_filters||[];DB.settings.saved_filters.push({id:'v_'+Date.now().toString(36),name:name.trim(),filters:libSnapshot()});saveSettings();renderLibrary();toast('View saved')}
 function deleteView(){const el=$('lib-views');if(!el||!el.value){toast('Choose a saved view first');return}const v=(DB.settings.saved_filters||[]).find(x=>x.id===el.value);if(!confirm(`Delete saved view "${v?v.name:''}"?`))return;DB.settings.saved_filters=DB.settings.saved_filters.filter(x=>x.id!==el.value);saveSettings();renderLibrary()}
-function gotoWorkNotes(wid){LIB.q='';LIB.tags=[];LIB.purpose='';LIB.person='';LIB.work=wid;LIB.sort='page';LIB.selMode=false;LIB.sel=new Set();nav('library')}
+function gotoWorkNotes(wid){LIB.q='';LIB.tags=[];LIB.purpose='';LIB.person='';LIB.work=wid;LIB.sort='page';LIB.selMode=false;LIB.sel=new Set();LIB.pf={};nav('library')}
 function sortNotes(arr){
   const st=LIB.sort||'new';
   const firstPage=n=>{const l=(n.locators||[]).find(x=>x.type==='page');const v=l?parseFloat(String(l.value).replace(/[^\d.]/g,'')):NaN;return isNaN(v)?Infinity:v};
@@ -809,7 +866,7 @@ function bulkBarHtml(){
     <button class="btn sm sec" onclick="selAll()">Select all results</button>
     <button class="btn sm sec" onclick="LIB.sel=new Set();renderLibrary()">Clear</button>
     <span style="border-left:1px solid var(--line);height:22px"></span>
-    <input id="bulk-tag-add" list="tag-list-lib" placeholder="tag…" style="width:100px">
+    <input id="bulk-tag-add" placeholder="tag…" style="width:100px">
     <button class="btn sm" onclick="bulkTag(true)">+ Add tag</button>
     <select id="bulk-tag-rm"><option value="">tag…</option>${selTagUnion().map(t=>`<option>${esc(t)}</option>`).join('')}</select>
     <button class="btn sm sec" onclick="bulkTag(false)">− Remove tag</button>
@@ -819,7 +876,8 @@ function bulkBarHtml(){
     <button class="btn sm sec" onclick="bulkPurpose(false)">− Remove</button>
     ${sw?`<span style="border-left:1px solid var(--line);height:22px"></span><button class="btn sm sec" onclick="openWorkModal('${sw}')">✎ Edit shared work / citation</button>`:''}`;
 }
-function renderBulkBar(){const el=document.getElementById('bulk-bar');if(el)el.innerHTML=bulkBarHtml()}
+function renderBulkBar(){const el=document.getElementById('bulk-bar');if(el){el.innerHTML=bulkBarHtml();wireBulkBarAutocomplete()}}
+function wireBulkBarAutocomplete(){const el=$('bulk-tag-add');if(el)makeAutocomplete(el,allTags)}
 async function bulkTag(add){
   const t=add?$('bulk-tag-add').value.trim():$('bulk-tag-rm').value;
   if(!t){toast('Pick a tag first');return}
@@ -885,9 +943,8 @@ function renderLibrary(){
     ${LIB.selMode?'<div class="rib-row" id="bulk-bar">'+bulkBarHtml()+'</div>':''}
     <div class="rib-row"><span class="small muted" style="align-self:center">Filter tags (AND):</span>
       ${topTags.map(t=>`<span class="chip ${LIB.tags.includes(t)?'on':''}" onclick="libTag('${esc(t).replace(/'/g,"\\'")}')">${esc(t)}</span>`).join('')}
-      <input id="lib-tag-in" list="tag-list-lib" placeholder="+ tag filter" style="width:110px" onchange="if(this.value){libTag(this.value);this.value=''}">
-      <datalist id="tag-list-lib">${allTags().map(t=>`<option value="${esc(t)}">`).join('')}</datalist>
-      ${LIB.tags.length||LIB.q||LIB.purpose||LIB.person||LIB.work?'<button class="btn sm sec" onclick="clearLib()">Clear filters</button>':''}
+      <input id="lib-tag-in" placeholder="+ tag filter" style="width:110px">
+      ${LIB.tags.length||LIB.q||LIB.purpose||LIB.person||LIB.work||Object.keys(LIB.pf||{}).length?'<button class="btn sm sec" onclick="clearLib()">Clear filters</button>':''}
       <span style="flex:1"></span>
       <select id="lib-views" onchange="applyView(this.value)">
         <option value="">saved views…</option>
@@ -896,12 +953,39 @@ function renderLibrary(){
       <button class="btn sm sec" onclick="saveView()" title="Save current filters as a named view">💾 Save view</button>
       <button class="btn sm sec" onclick="deleteView()" title="Delete the selected saved view">✕</button>
     </div>
+    ${filterableFields().map(f=>{
+      const pkey=f.purpose+'|'+f.key;
+      const vals=fieldValues(f.purpose,f.key);
+      if(!vals.length)return'';
+      return `<div class="rib-row"><span class="small muted" style="align-self:center;min-width:130px">${esc(f.purpose)} · ${esc(f.label)}:</span>
+        ${vals.map(v=>`<span class="chip ${(LIB.pf[pkey]||[]).includes(v)?'on':''}" onclick="togglePF('${esc(pkey).replace(/'/g,"\\'")}','${esc(v).replace(/'/g,"\\'")}')">${esc(v)}</span>`).join('')}</div>`;
+    }).join('')}
   </div>
   <div id="lib-results"></div>`;
   renderLibResults();
+  const lti=$('lib-tag-in');if(lti)makeAutocomplete(lti,allTags,{onEnter:v=>{libTag(v);lti.value=''}});
+  wireBulkBarAutocomplete();
 }
 function libTag(t){LIB.tags.includes(t)?LIB.tags=LIB.tags.filter(x=>x!==t):LIB.tags.push(t);renderLibrary()}
-function clearLib(){LIB={q:'',inQ:true,inN:true,inT:true,tags:[],purpose:'',work:'',person:''};renderLibrary()}
+function clearLib(){LIB={q:'',inQ:true,inN:true,inT:true,tags:[],purpose:'',work:'',person:'',sort:LIB.sort,selMode:false,sel:new Set(),pf:{}};renderLibrary()}
+function filterableFields(){
+  const out=[];
+  DB.purposes.forEach(p=>(p.fields||[]).forEach(f=>{if(f.filterable)out.push({purpose:p.name,key:f.key,label:f.label})}));
+  return out;
+}
+function fieldValues(purpose,key){
+  const s=new Set();
+  DB.notes.forEach(n=>{const v=n.purpose_values&&n.purpose_values[purpose]&&n.purpose_values[purpose][key];if(v)s.add(v)});
+  return[...s].sort((a,b)=>a.localeCompare(b));
+}
+function togglePF(pkey,val){
+  LIB.pf=LIB.pf||{};
+  const arr=LIB.pf[pkey]=LIB.pf[pkey]||[];
+  const i=arr.indexOf(val);
+  if(i>=0)arr.splice(i,1);else arr.push(val);
+  if(!arr.length)delete LIB.pf[pkey];
+  renderLibrary();
+}
 function libResults(){
   const q=LIB.q.trim().toLowerCase();
   const toks=q?q.split(/\s+/):[];
@@ -910,6 +994,11 @@ function libResults(){
     if(LIB.person){const w=W(n.work_id);if(!w||!DB.wc.some(c=>c.work_id===w.id&&c.person_id===LIB.person))return false}
     if(LIB.purpose&&!(n.purposes||[]).includes(LIB.purpose))return false;
     if(LIB.tags.length&&!LIB.tags.every(t=>(n.tags||[]).includes(t)))return false;
+    for(const pkey in(LIB.pf||{})){
+      const sep=pkey.indexOf('|'), purpose=pkey.slice(0,sep), key=pkey.slice(sep+1);
+      const nv=n.purpose_values&&n.purpose_values[purpose]&&n.purpose_values[purpose][key];
+      if(!nv||!LIB.pf[pkey].includes(nv))return false;
+    }
     if(!toks.length)return true;
     const w=W(n.work_id);
     let hay='';
@@ -1059,8 +1148,7 @@ function renderSettings(){
     <p class="small muted">Shown as one-tap chips in the editor ribbon. Click to unpin; add from the list below.</p>
     <div class="row">${pinned.map(t=>`<span class="chip on" onclick="unpin('${esc(t).replace(/'/g,"\\'")}')">${esc(t)} ×</span>`).join('')||'<span class="muted small">none pinned</span>'}</div>
     <div class="row" style="margin-top:8px">
-      <input id="pin-in" list="tag-list-set" placeholder="tag to pin…" onchange="if(this.value){pin(this.value);this.value=''}">
-      <datalist id="tag-list-set">${allTags().map(t=>`<option value="${esc(t)}">`).join('')}</datalist>
+      <input id="pin-in" placeholder="tag to pin…">
     </div>
   </div>
   <div class="card set-section">
@@ -1100,7 +1188,7 @@ function renderSettings(){
   <div class="card set-section">
     <h3>Text cleanup rules</h3>
     <p class="small muted">Applied from the 🧹 button on the quote/notes panes in the editor. Create rules and multi-step sequences there too.</p>
-    ${(DB.settings.cleanup_rules||[]).map(r=>`<div class="row" style="margin:4px 0;border-bottom:1px solid var(--line);padding-bottom:4px"><b class="small">${esc(r.name)}</b><span class="small muted">replace ${esc(JSON.stringify(r.find))} with ${esc(JSON.stringify(r.replace))}${r.mode==='text'?' · plain text':''}${r.regex?' · regex':''}</span><span style="flex:1"></span><button class="btn sm sec" onclick="delCleanRuleId('${r.id}')">Delete</button></div>`).join('')||'<p class="small muted">No custom rules yet.</p>'}
+    ${(DB.settings.cleanup_rules||[]).filter(r=>!r.hidden).map(r=>`<div class="row" style="margin:4px 0;border-bottom:1px solid var(--line);padding-bottom:4px"><b class="small">${esc(r.name)}</b><span class="small muted">replace ${esc(JSON.stringify(r.find))} with ${esc(JSON.stringify(r.replace))}${r.mode==='text'?' · plain text':''}${r.regex?' · regex':''}</span><span style="flex:1"></span><button class="btn sm sec" onclick="delCleanRuleId('${r.id}')">Delete</button></div>`).join('')||'<p class="small muted">No custom rules yet.</p>'}
     ${(DB.settings.cleanup_seqs||[]).map(q=>`<div class="row" style="margin:4px 0;border-bottom:1px solid var(--line);padding-bottom:4px"><b class="small">⚡ ${esc(q.name)}</b><span class="small muted">${q.steps.map(stepLabel).map(esc).join(' → ')}</span><span style="flex:1"></span><button class="btn sm sec" onclick="delCleanSeq('${q.id}')">Delete</button></div>`).join('')}
   </div>
   <div class="card set-section">
@@ -1115,9 +1203,10 @@ function renderSettings(){
   </div>
   <div class="card set-section">
     <h3>Account</h3>
-    <p class="small muted">${esc((USER&&USER.email)||'')} · Notes on Books v1.3</p>
+    <p class="small muted">${esc((USER&&USER.email)||'')} · Notes on Books v1.4</p>
     <button class="btn sec" onclick="sb.auth.signOut().then(()=>location.reload())">Sign out</button>
   </div>`;
+  const pinIn=$('pin-in');if(pinIn)makeAutocomplete(pinIn,allTags,{onEnter:v=>{pinIn.value=v;pin(v)}});
 }
 function addCustomStyle(){
   const name=$('cs-name').value.trim(),note=$('cs-note').value.trim(),bib=$('cs-bib').value.trim();
@@ -1143,6 +1232,7 @@ function purpAdminRow(p){
         <option value="select" ${f.type==='select'?'selected':''}>dropdown</option>
       </select>
       ${f.type==='select'?`<input placeholder="options, comma-separated" style="flex:1" value="${esc((f.options||[]).join(', '))}" onchange="updField('${p.id}',${i},'options',this.value)">`:''}
+      <label class="small" style="margin:0;text-transform:none;display:flex;align-items:center;gap:4px;white-space:nowrap"><input type="checkbox" ${f.filterable?'checked':''} onchange="updField('${p.id}',${i},'filterable',this.checked)"> filterable in library</label>
       <button class="btn sm sec" onclick="rmField('${p.id}',${i})">×</button></div>`).join('')}
   </div>`;
 }
@@ -1275,44 +1365,116 @@ function textToHtml(txt){
   return txt.split(/\n{2,}/).map(p=>p.trim()).filter(Boolean)
     .map(p=>'<p>'+esc(p).replace(/\n/g,'<br>')+'</p>').join('');
 }
-function applyCleanStep(el,key){
-  if(key.startsWith('s:')){
-    const sq=(DB.settings.cleanup_seqs||[]).find(x=>x.id===key.slice(2));
-    if(sq)sq.steps.forEach(st=>applyCleanStep(el,st));
-    return;
-  }
+function fragText(node){
+  let out='';
+  node.childNodes.forEach(ch=>{
+    if(ch.nodeType===3)out+=ch.textContent;
+    else if(ch.nodeType===1){
+      const tag=ch.tagName;
+      if(tag==='BR')out+='\n';
+      else{
+        const inner=fragText(ch);
+        if(tag==='P'||tag==='DIV'||tag==='LI')out+=inner+'\n\n';
+        else out+=inner;
+      }
+    }
+  });
+  return out;
+}
+function textToInline(txt){
+  return esc(txt).split(/\n{2,}/).join('<br><br>').replace(/\n/g,'<br>');
+}
+function isTextStep(key){
+  if(key==='b:joinlines')return true;
+  if(key.startsWith('r:')){const r=(DB.settings.cleanup_rules||[]).find(x=>x.id===key.slice(2));return r&&r.mode==='text'}
+  return false;
+}
+function htmlStepTransform(html,key){
   const urlPat=/(^|[^"'=\w])(https?:\/\/[^\s<)"']+)(?![^<]*>)/g;
-  let h=el.innerHTML.replace(/&nbsp;/g,' ');
+  let h=html.replace(/&nbsp;/g,' ');
   if(key==='b:spaces')h=h.replace(/ {2,}/g,' ');
   else if(key==='b:linkify')h=h.replace(urlPat,'$1<a href="$2" target="_blank">🔗</a>');
   else if(key==='b:strip_urls')h=h.replace(urlPat,'$1');
-  else if(key==='b:joinlines'){
-    const txt=el.innerText||'';
-    h=txt.split(/\n{2,}/).map(p=>p.replace(/\s*\n\s*/g,' ').replace(/ {2,}/g,' ').trim()).filter(Boolean)
-      .map(p=>'<p>'+esc(p)+'</p>').join('');
-  }
   else if(key.startsWith('r:')){
     const r=(DB.settings.cleanup_rules||[]).find(x=>x.id===key.slice(2));
-    if(!r)return;
-    const find=unescTok(r.find), repl=unescTok(r.replace);
-    const pat=r.regex?new RegExp(find,'g'):new RegExp(find.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'g');
-    if(r.mode==='text'){
-      let txt=(el.innerText||'').replace(pat,repl);
-      h=textToHtml(txt);
-    }else h=h.replace(pat,repl);
+    if(r&&r.mode!=='text'){
+      const find=unescTok(r.find),repl=unescTok(r.replace);
+      const pat=r.regex?new RegExp(find,'g'):new RegExp(find.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'g');
+      h=h.replace(pat,repl);
+    }
   }
-  el.innerHTML=h;
+  return h;
+}
+function textStepTransform(txt,key,inline){
+  if(key==='b:joinlines'){
+    if(inline)return txt.replace(/\s*\n+\s*/g,' ').replace(/ {2,}/g,' ').trim();
+    return txt.split(/\n{2,}/).map(p=>p.replace(/\s*\n\s*/g,' ').replace(/ {2,}/g,' ').trim()).filter(Boolean).join('\n\n');
+  }
+  if(key.startsWith('r:')){
+    const r=(DB.settings.cleanup_rules||[]).find(x=>x.id===key.slice(2));
+    if(r){
+      const find=unescTok(r.find),repl=unescTok(r.replace);
+      const pat=r.regex?new RegExp(find,'g'):new RegExp(find.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'g');
+      return txt.replace(pat,repl);
+    }
+  }
+  return txt;
+}
+function expandSteps(keys){
+  const out=[];
+  keys.forEach(k=>{
+    if(k.startsWith('s:')){const sq=(DB.settings.cleanup_seqs||[]).find(x=>x.id===k.slice(2));if(sq)out.push(...expandSteps(sq.steps))}
+    else out.push(k);
+  });
+  return out;
+}
+function applyCleanStep(el,key){
+  expandSteps([key]).forEach(k=>{
+    if(isTextStep(k)){
+      const txt=textStepTransform(el.innerText||'',k,false);
+      el.innerHTML=textToHtml(txt);
+    }else el.innerHTML=htmlStepTransform(el.innerHTML,k);
+  });
+}
+function applyStepsToRange(range,keys){
+  const tmp=document.createElement('div');
+  tmp.appendChild(range.cloneContents());
+  expandSteps(keys).forEach(k=>{
+    if(isTextStep(k)){
+      const txt=textStepTransform(fragText(tmp),k,true);
+      tmp.innerHTML=textToInline(txt);
+    }else tmp.innerHTML=htmlStepTransform(tmp.innerHTML,k);
+  });
+  range.deleteContents();
+  const frag=document.createDocumentFragment();
+  let node;while(node=tmp.firstChild)frag.appendChild(node);
+  range.insertNode(frag);
+}
+let PENDING_SEL=null;
+function captureSelAndOpenCleanup(k){
+  const el=$('rte-'+k);
+  PENDING_SEL=null;
+  const sel=window.getSelection();
+  if(sel&&sel.rangeCount){
+    const range=sel.getRangeAt(0);
+    if(!range.collapsed&&el&&el.contains(range.commonAncestorContainer))PENDING_SEL={k,range:range.cloneRange()};
+  }
+  openCleanup(k);
 }
 function runClean(k,key){
   const el=$('rte-'+k);if(!el)return;
-  applyCleanStep(el,key);
+  if(PENDING_SEL&&PENDING_SEL.k===k){applyStepsToRange(PENDING_SEL.range,[key])}
+  else applyCleanStep(el,key);
+  PENDING_SEL=null;
   syncPanes();scheduleSave();closeModal();toast('Cleaned');
 }
 function openCleanup(k){
   syncPanes();
-  const seqs=DB.settings.cleanup_seqs||[], rules=DB.settings.cleanup_rules||[];
+  const usingSel=PENDING_SEL&&PENDING_SEL.k===k;
+  const seqs=DB.settings.cleanup_seqs||[], rules=(DB.settings.cleanup_rules||[]).filter(r=>!r.hidden);
   const show=v=>esc(JSON.stringify(v));
   $('modal').innerHTML=`<h3>Clean up ${k==='q'?'quote':'notes'} text</h3>
+   <p class="small muted">${usingSel?'Applying to the selected text only.':'No text selected — this will apply to the whole '+(k==='q'?'quote':'note')+'.'}</p>
    ${seqs.length?'<label>One-tap sequences</label>':''}
    ${seqs.map(q=>`<div class="sugg" onclick="runClean('${k}','s:${q.id}')"><b>⚡ ${esc(q.name)}</b><br><span class="muted">${q.steps.map(stepLabel).map(esc).join(' → ')}</span></div>`).join('')}
    <label>Built-in</label>
@@ -1352,15 +1514,36 @@ function saveNewRule(k){
 let SEQ_DRAFT=[],SEQ_NAME='';
 function newSeqModal(k){SEQ_DRAFT=[];SEQ_NAME='';renderSeqModal(k)}
 function addSeqStep(key,k){const el=$('sq-name');if(el)SEQ_NAME=el.value;SEQ_DRAFT.push(key);renderSeqModal(k)}
+function addInlineSeqStep(k){
+  const name=$('is-name').value.trim(),find=$('is-find').value,repl=$('is-repl').value;
+  if(!name||!find){toast('Name and Find are required for the new step');return}
+  DB.settings.cleanup_rules=DB.settings.cleanup_rules||[];
+  const id='cr_'+Date.now().toString(36);
+  DB.settings.cleanup_rules.push({id,name,find,replace:repl,regex:$('is-regex').checked,mode:$('is-text').checked?'text':'html',hidden:true});
+  saveSettings();
+  SEQ_NAME=$('sq-name')?$('sq-name').value:SEQ_NAME;
+  SEQ_DRAFT.push('r:'+id);
+  renderSeqModal(k);
+}
 function renderSeqModal(k){
-  const rules=DB.settings.cleanup_rules||[];
+  const rules=(DB.settings.cleanup_rules||[]).filter(r=>!r.hidden);
   const avail=[...CLEAN_BUILTINS.map(b=>[b[0],b[1]]),...rules.map(r=>['r:'+r.id,r.name])];
   $('modal').innerHTML=`<h3>New cleanup sequence</h3>
-   <p class="small muted">Tap steps in the order they should run — one button will then do all of them.</p>
+   <p class="small muted">Tap steps in the order they should run, or define a brand-new find/replace step right here — everything ends up as one button.</p>
    <label>Sequence name</label><input id="sq-name" style="width:100%" placeholder="PDF paste fixup" value="${esc(SEQ_NAME)}" onchange="SEQ_NAME=this.value">
    <label>Available steps (tap to add)</label>
    <div class="row">${avail.map(([key,name])=>`<span class="chip" onclick="addSeqStep('${key}','${k}')">${esc(name)}</span>`).join('')}</div>
-   <label>Sequence (${SEQ_DRAFT.length} steps)</label>
+   <details style="margin-top:8px"><summary class="small" style="cursor:pointer;color:var(--accent)">+ Define a new find/replace step</summary>
+     <label>Step name</label><input id="is-name" style="width:100%" placeholder="Kill soft returns">
+     <label>Find</label><input id="is-find" style="width:100%" placeholder="use \\n for line break, \\t for tab">
+     <label>Replace with (blank = delete matches)</label><input id="is-repl" style="width:100%">
+     <div class="row" style="margin-top:6px">
+       <label style="margin:0;text-transform:none;display:flex;align-items:center;gap:5px"><input type="checkbox" id="is-text" checked> plain-text mode</label>
+       <label style="margin:0;text-transform:none;display:flex;align-items:center;gap:5px"><input type="checkbox" id="is-regex"> regex</label>
+     </div>
+     <button class="btn sm" style="margin-top:8px" onclick="addInlineSeqStep('${k}')">Add this step to the sequence</button>
+   </details>
+   <label style="margin-top:10px">Sequence (${SEQ_DRAFT.length} steps)</label>
    <div class="row">${SEQ_DRAFT.map((st,i)=>`<span class="chip on">${i+1}. ${esc(stepLabel(st))}<span class="x" onclick="SEQ_NAME=document.getElementById('sq-name').value;SEQ_DRAFT.splice(${i},1);renderSeqModal('${k}')">×</span></span>`).join('')||'<span class="muted small">none yet</span>'}</div>
    <div class="row" style="margin-top:12px">
      <button class="btn" onclick="saveNewSeq('${k}')">Save sequence</button>
@@ -1376,7 +1559,20 @@ function saveNewSeq(k){
   saveSettings();toast('Sequence saved');openCleanup(k);
 }
 function delCleanRuleId(id){DB.settings.cleanup_rules=(DB.settings.cleanup_rules||[]).filter(x=>x.id!==id);saveSettings();renderSettings()}
-function delCleanSeq(id){DB.settings.cleanup_seqs=(DB.settings.cleanup_seqs||[]).filter(x=>x.id!==id);saveSettings();renderSettings()}
+function delCleanSeq(id){
+  const seq=(DB.settings.cleanup_seqs||[]).find(x=>x.id===id);
+  DB.settings.cleanup_seqs=(DB.settings.cleanup_seqs||[]).filter(x=>x.id!==id);
+  if(seq){
+    const stillUsed=k=>(DB.settings.cleanup_seqs||[]).some(sq=>sq.steps.includes(k));
+    seq.steps.forEach(st=>{
+      if(st.startsWith('r:')){
+        const rid=st.slice(2), r=(DB.settings.cleanup_rules||[]).find(x=>x.id===rid);
+        if(r&&r.hidden&&!stillUsed(st))DB.settings.cleanup_rules=DB.settings.cleanup_rules.filter(x=>x.id!==rid);
+      }
+    });
+  }
+  saveSettings();renderSettings();
+}
 
 window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue=''}});
 boot();
