@@ -814,6 +814,7 @@ async function saveWork(){
   for(const[role,arr]of[['author',MW._authors],['editor',MW._editors],['translator',MW._translators]])
     for(let i=0;i<arr.length;i++)rows.push({work_id:wid,person_id:await ensurePerson(arr[i]),role,position:i});
   if(rows.length){const{data,error}=await sb.from('work_contributors').insert(rows).select();if(error){toast(error.message);return}DB.wc.push(...data)}
+  if(KINDLE_IMPORT){const ki=KINDLE_IMPORT;KINDLE_IMPORT=null;await finishKindleImport(wid,ki);return}
   if(CUR)CUR.work_id=wid;
   closeModal();toast('Work saved');renderEditor();
 }
@@ -826,6 +827,164 @@ async function deleteWork(){
   DB.notes.forEach(x=>{if(x.work_id===MW.id)x.work_id=null});
   if(CUR&&CUR.work_id===MW.id)CUR.work_id=null;
   closeModal();renderEditor();
+}
+
+/* ================= Kindle notebook import ================= */
+let KI=null, KINDLE_IMPORT=null;
+function stripTagsToText(html){const d=document.createElement('div');d.innerHTML=html||'';return d.textContent||''}
+function normalizeAuthorName(s){
+  s=(s||'').trim();
+  if(/,/.test(s)){const parts=s.split(',');const last=parts.shift().trim();return(parts.join(',').trim()+' '+last).trim()}
+  return s;
+}
+function parseKindleCitation(citHtml){
+  const out={authors:[],publisher:'',year:''};
+  if(!citHtml)return out;
+  const raw=citHtml.replace(/^\s*Citation\s*\([^)]*\)\s*:\s*/i,'');
+  const im=raw.match(/<i>([\s\S]*?)<\/i>/i);
+  if(!im)return out;
+  const pre=stripTagsToText(raw.slice(0,im.index)).trim().replace(/\.\s*$/,'');
+  const post=stripTagsToText(raw.slice(im.index+im[0].length)).trim();
+  const toks=pre.split(',').map(t=>t.replace(/^\s*and\s+/i,'').trim()).filter(Boolean);
+  for(let i=0;i+1<toks.length;i+=2)out.authors.push((toks[i+1]+' '+toks[i]).trim());
+  if(toks.length%2===1)out.authors.push(toks[toks.length-1]);
+  const pm=post.match(/^[.,\s]*([A-Za-z0-9&'.\- ]+?),\s*(\d{4})/);
+  if(pm){out.publisher=pm[1].trim();out.year=pm[2]}
+  return out;
+}
+function parseKindleHtml(html){
+  const doc=new DOMParser().parseFromString(html,'text/html');
+  const bodyC=doc.querySelector('.bodyContainer');
+  const titleEl=doc.querySelector('.bookTitle');
+  if(!bodyC||!titleEl)throw new Error("Doesn't look like a Kindle Notebook export — no book title found.");
+  const title=titleEl.textContent.trim();
+  const citEl=doc.querySelector('.citation');
+  const parsedCit=parseKindleCitation(citEl?citEl.innerHTML:'');
+  let authors=parsedCit.authors;
+  if(!authors.length){
+    const aEl=doc.querySelector('.authors');
+    if(aEl)authors=aEl.textContent.split(';').map(normalizeAuthorName).filter(Boolean);
+  }
+  const kids=[...bodyC.children];
+  let chapter='';const raw=[];
+  for(let i=0;i<kids.length;i++){
+    const el=kids[i],cls=el.className||'';
+    if(/sectionHeading/.test(cls)){chapter=el.textContent.trim().replace(/^CHAPTER\s+/i,'');continue}
+    if(/noteHeading/.test(cls)){
+      const headTxt=el.textContent.replace(/\s+/g,' ').trim();
+      const isNote=/^Note\b/i.test(headTxt)&&!/^Highlight/i.test(headTxt);
+      const pm=headTxt.match(/Page\s*([^\s·]+)/i);
+      const lm=headTxt.match(/Location\s*([^\s·]+)/i);
+      let text='';const next=kids[i+1];
+      if(next&&/noteText/.test(next.className||'')){text=next.textContent.trim();i++}
+      raw.push({kind:isNote?'note':'highlight',page:pm?pm[1]:'',loc:lm?lm[1]:'',text,chapter});
+    }
+  }
+  const entries=[];
+  for(let i=0;i<raw.length;i++){
+    const r=raw[i];
+    if(r.kind==='highlight'){
+      const nxt=raw[i+1];
+      if(nxt&&nxt.kind==='note'&&r.loc&&nxt.loc===r.loc){entries.push({quote:r.text,note:nxt.text,page:r.page,loc:r.loc,chapter:r.chapter});i++}
+      else entries.push({quote:r.text,note:'',page:r.page,loc:r.loc,chapter:r.chapter});
+    }else entries.push({quote:'',note:r.text,page:r.page,loc:r.loc,chapter:r.chapter});
+  }
+  if(!entries.length)throw new Error('No highlights or notes found in this file.');
+  return{title,authors,publisher:parsedCit.publisher,year:parsedCit.year,entries};
+}
+async function importKindleFile(file){
+  if(!file)return;
+  const st=$('imp-status');
+  try{
+    const text=await file.text();
+    const parsed=parseKindleHtml(text);
+    if(st)st.textContent='';
+    openKindleReview(parsed);
+  }catch(e){if(st)st.textContent='Kindle import failed: '+e.message;else alert('Kindle import failed: '+e.message)}
+}
+function normTitle(s){return(s||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim()}
+function kindleMatchWorks(title,authors){
+  const nt=normTitle(title);
+  return DB.works.map(w=>{
+    const wt=normTitle(w.title);
+    let ts=0;
+    if(nt&&wt){
+      if(nt===wt)ts=1;
+      else if(nt.includes(wt)||wt.includes(nt))ts=.7;
+      else{const aw=new Set(nt.split(' ')),bw=new Set(wt.split(' '));let common=0;aw.forEach(x=>{if(x.length>2&&bw.has(x))common++});ts=common/Math.max(aw.size,bw.size,1)}
+    }
+    const names=DB.wc.filter(c=>c.work_id===w.id).map(c=>{const p=P(c.person_id);return p?p.name.toLowerCase():''}).join(' | ');
+    let ahit=0;(authors||[]).forEach(a=>{const last=a.trim().split(/\s+/).pop().toLowerCase();if(last&&names.includes(last))ahit++});
+    const as=(authors&&authors.length)?ahit/authors.length:0;
+    return{work:w,score:ts*.7+as*.3};
+  }).sort((a,b)=>b.score-a.score);
+}
+function openKindleReview(parsed){
+  const matches=kindleMatchWorks(parsed.title,parsed.authors);
+  const best=matches[0];
+  KI={...parsed,purposes:[],matchId:(best&&best.score>=.5)?best.work.id:''};
+  renderKindleReview();
+}
+function renderKindleReview(){
+  const opts=[...DB.works].sort((a,b)=>a.title.localeCompare(b.title))
+    .map(w=>`<option value="${w.id}" ${w.id===KI.matchId?'selected':''}>${esc(w.title)}</option>`).join('');
+  const purpChips=DB.purposes.map(p=>`<span class="chip ${KI.purposes.includes(p.name)?'on':''}" onclick="kiTogglePurpose('${esc(p.name).replace(/'/g,"\\'")}')">${esc(p.name)}</span>`).join('')||'<span class="small muted">No purposes set up yet — skip, or add one in Settings first.</span>';
+  $('modal').innerHTML=`
+  <h3>Import from Kindle</h3>
+  <p class="small muted"><b>${esc(KI.title)}</b><br>${esc((KI.authors||[]).join(', '))}${KI.publisher?' · '+esc(KI.publisher):''}${KI.year?', '+esc(KI.year):''}<br>${KI.entries.length} highlight${KI.entries.length===1?'':'s'}/notes found.</p>
+  <label>Add to</label>
+  <select id="ki-work" onchange="KI.matchId=this.value">
+    <option value="" ${!KI.matchId?'selected':''}>— Create a new work —</option>
+    ${opts}
+  </select>
+  <p class="small muted">${KI.matchId?'Notes will be added to the work selected above — check it\u2019s the right one, or switch to "Create a new work."':'No confident match found — pick an existing work above, or continue to create a new one.'}</p>
+  <label style="margin-top:10px">Apply purpose to all imported notes (optional)</label>
+  <div class="row" style="flex-wrap:wrap;gap:4px">${purpChips}</div>
+  <div class="row" style="margin-top:14px">
+    <button class="btn" onclick="kiContinue()">Continue</button>
+    <button class="btn sec" onclick="closeModal()">Cancel</button>
+  </div>
+  <p class="small muted" id="ki-status"></p>`;
+  $('modal-bg').classList.remove('hidden');
+}
+function kiTogglePurpose(name){KI.purposes.includes(name)?KI.purposes=KI.purposes.filter(x=>x!==name):KI.purposes.push(name);renderKindleReview()}
+async function kiContinue(){
+  const wid=$('ki-work').value;
+  if(wid){
+    const st=$('ki-status');if(st)st.textContent='Importing…';
+    await finishKindleImport(wid,{entries:KI.entries,purposes:KI.purposes});
+  }else{
+    KINDLE_IMPORT={entries:KI.entries,purposes:KI.purposes};
+    openWorkModal(null);
+    MW.title=KI.title;
+    MW._authors=[...(KI.authors||[])];
+    if(KI.publisher)MW.pub.publisher=KI.publisher;
+    if(KI.year)MW.pub.year=KI.year;
+    MW.pub.edition='Kindle edition';
+    renderWorkModal();
+  }
+}
+async function finishKindleImport(wid,ki){
+  const have=new Set(DB.notes.filter(n=>n.work_id===wid).flatMap(n=>(n.locators||[]).filter(l=>l.type==='kindle').map(l=>String(l.value))));
+  const fresh=ki.entries.filter(e=>!(e.loc&&have.has(String(e.loc))));
+  const skipped=ki.entries.length-fresh.length;
+  const recs=fresh.map(e=>{
+    const locators=[];
+    if(e.chapter)locators.push({type:'chapter',value:e.chapter});
+    if(e.page)locators.push({type:'page',value:e.page});
+    if(e.loc)locators.push({type:'kindle',value:e.loc});
+    return{work_id:wid,quote_html:e.quote?textToHtml(e.quote):'',note_html:e.note?textToHtml(e.note):'',
+      locators,tags:[],purposes:[...ki.purposes],purpose_values:{},chapter_title:'',chapter_author:'',date_added:new Date().toISOString()};
+  });
+  let inserted=0;
+  for(let i=0;i<recs.length;i+=200){
+    const{data,error}=await sb.from('notes').insert(recs.slice(i,i+200)).select();
+    if(error){toast(error.message);break}
+    DB.notes.push(...data);inserted+=data.length;
+  }
+  closeModal();
+  toast(`Imported ${inserted} note${inserted===1?'':'s'}${skipped?` (${skipped} already present, skipped)`:''}`);
+  gotoWorkNotes(wid);
 }
 </script>
 
@@ -1197,12 +1356,14 @@ function renderSettings(){
       <button class="btn" onclick="exportJSON()">⬇ Full backup (JSON)</button>
       <button class="btn sec" onclick="exportCSV()">⬇ Notes as CSV</button>
       <label class="btn sec" style="margin:0">⬆ Import backup JSON<input type="file" accept=".json" style="display:none" onchange="importJSON(this.files[0])"></label>
+      <label class="btn sec" style="margin:0">⬆ Import from Kindle (HTML)<input type="file" accept=".html,.htm,text/html" style="display:none" onchange="importKindleFile(this.files[0]);this.value=''"></label>
     </div>
+    <p class="small muted">Kindle: on the book's Notebook page, tap "Export Notebook" to download the HTML file, then import it here.</p>
     <p class="small muted" id="imp-status"></p>
   </div>
   <div class="card set-section">
     <h3>Account</h3>
-    <p class="small muted">${esc((USER&&USER.email)||'')} · Notes on Books v1.4</p>
+    <p class="small muted">${esc((USER&&USER.email)||'')} · Notes on Books v1.5</p>
     <button class="btn sec" onclick="sb.auth.signOut().then(()=>location.reload())">Sign out</button>
   </div>`;
   const pinIn=$('pin-in');if(pinIn)makeAutocomplete(pinIn,allTags,{onEnter:v=>{pinIn.value=v;pin(v)}});
