@@ -663,7 +663,6 @@ function renderWorkModal(){
   const origOpts=DB.works.filter(x=>x.id!==MW.id).map(x=>`<option value="${x.id}" ${x.id===MW.original_work_id?'selected':''}>${esc(x.title)}</option>`).join('');
   $('modal').innerHTML=`
   <h3>${MW.id?'Edit work':'New work'}</h3>
-  ${peopleList}
   <label>Citation parser — paste a full citation and I'll split it into fields</label>
   <div class="row"><input id="cp-in" style="flex:1" placeholder='e.g. John Owen, Overcoming Sin and Temptation (Wheaton: Crossway, 2006)'>
   <button class="btn sm sec" onclick="parseCitation()">Parse</button>
