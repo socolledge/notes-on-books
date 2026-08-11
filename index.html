@@ -46,7 +46,7 @@ mark{background:var(--hl)}
 .center-wrap .card{width:100%;max-width:430px}
 .center-wrap h1{margin:4px 0 2px;font-size:26px}
 /* ---------- app shell ---------- */
-#appbar{position:sticky;top:0;z-index:30;background:var(--panel);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:4px;padding:6px 12px;padding-top:calc(6px + env(safe-area-inset-top))}
+#appbar{position:sticky;top:var(--vv-offset,0px);z-index:30;background:var(--panel);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:4px;padding:6px 12px;padding-top:calc(6px + env(safe-area-inset-top))}
 #appbar .brand{font-family:var(--serif);font-weight:700;font-size:17px;margin-right:8px;white-space:nowrap}
 #appbar nav{display:flex;gap:2px;flex:1;overflow-x:auto}
 #appbar nav button{background:none;border:none;border-radius:7px;padding:7px 12px;font-size:13.5px;color:var(--muted);font-weight:600;white-space:nowrap}
@@ -63,7 +63,7 @@ mark{background:var(--hl)}
 /* ---------- panes ---------- */
 #panes{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .pane{background:var(--panel);border:1px solid var(--line);border-radius:12px;display:flex;flex-direction:column;min-height:300px}
-.pane-head{display:flex;align-items:center;gap:6px;padding:7px 10px;border-bottom:1px solid var(--line);position:sticky;top:var(--appbar-h,48px);z-index:15;background:var(--panel);border-radius:12px 12px 0 0}
+.pane-head{display:flex;align-items:center;gap:6px;padding:7px 10px;border-bottom:1px solid var(--line);position:sticky;top:calc(var(--appbar-h,48px) + var(--vv-offset,0px));z-index:15;background:var(--panel);border-radius:12px 12px 0 0}
 .pane-head .ttl{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);flex:1}
 .tbtn{border:1px solid var(--line);background:#fff;border-radius:6px;min-width:30px;height:28px;font-size:13px;padding:0 7px}
 .tbtn:hover{background:var(--chip)}
@@ -224,6 +224,29 @@ function makeAutocomplete(inputEl,getOptions,opts){
 function syncAppbarHeight(){const b=$('appbar');if(b)document.documentElement.style.setProperty('--appbar-h',b.offsetHeight+'px')}
 window.addEventListener('resize',syncAppbarHeight);
 
+// iOS Safari: when the virtual keyboard opens, the visual viewport shrinks and can shift
+// downward relative to the layout viewport (which position:sticky is anchored to), pushing
+// sticky toolbars up out of the visible area. Compensate by tracking visualViewport.offsetTop.
+function syncViewportOffset(){
+  if(!window.visualViewport)return;
+  const off=Math.max(0,Math.round(window.visualViewport.offsetTop||0));
+  document.documentElement.style.setProperty('--vv-offset',off+'px');
+}
+if(window.visualViewport){
+  window.visualViewport.addEventListener('resize',syncViewportOffset);
+  window.visualViewport.addEventListener('scroll',syncViewportOffset);
+  syncViewportOffset();
+}
+document.addEventListener('focusin',e=>{
+  if(e.target&&e.target.closest&&e.target.closest('.rte')){
+    syncViewportOffset();
+    setTimeout(syncViewportOffset,60);setTimeout(syncViewportOffset,300);setTimeout(syncViewportOffset,600);
+  }
+});
+document.addEventListener('focusout',e=>{
+  if(e.target&&e.target.closest&&e.target.closest('.rte'))setTimeout(syncViewportOffset,300);
+});
+
 function boot(){
   syncAppbarHeight();
   const url=localStorage.getItem('nob_url'), key=localStorage.getItem('nob_key');
@@ -302,6 +325,209 @@ function locatorStr(locs,style){
     if(l.type==='folio')return'fol. '+l.value;
     return l.value;
   }).join(', ');
+}
+
+/* ================= Scripture references ================= */
+const BIBLE_BOOKS=[
+{name:'Genesis',test:'OT',chapters:50,abbr:['gen','ge','gn']},
+{name:'Exodus',test:'OT',chapters:40,abbr:['exod','exo','ex']},
+{name:'Leviticus',test:'OT',chapters:27,abbr:['lev','le','lv']},
+{name:'Numbers',test:'OT',chapters:36,abbr:['num','nu','nm','nb']},
+{name:'Deuteronomy',test:'OT',chapters:34,abbr:['deut','deu','de','dt']},
+{name:'Joshua',test:'OT',chapters:24,abbr:['josh','jos']},
+{name:'Judges',test:'OT',chapters:21,abbr:['judg','jdg','jg']},
+{name:'Ruth',test:'OT',chapters:4,abbr:['ru']},
+{name:'1 Samuel',test:'OT',chapters:31,abbr:['1sam','1sa','1s','1samuel']},
+{name:'2 Samuel',test:'OT',chapters:24,abbr:['2sam','2sa','2s','2samuel']},
+{name:'1 Kings',test:'OT',chapters:22,abbr:['1kgs','1ki','1k','1kings']},
+{name:'2 Kings',test:'OT',chapters:25,abbr:['2kgs','2ki','2k','2kings']},
+{name:'1 Chronicles',test:'OT',chapters:29,abbr:['1chr','1ch','1chron','1chronicles']},
+{name:'2 Chronicles',test:'OT',chapters:36,abbr:['2chr','2ch','2chron','2chronicles']},
+{name:'Ezra',test:'OT',chapters:10,abbr:['ezr']},
+{name:'Nehemiah',test:'OT',chapters:13,abbr:['neh','ne']},
+{name:'Esther',test:'OT',chapters:10,abbr:['esth','est']},
+{name:'Job',test:'OT',chapters:42,abbr:['jb']},
+{name:'Psalms',test:'OT',chapters:150,abbr:['ps','psa','psalm','psm','pslm','pss']},
+{name:'Proverbs',test:'OT',chapters:31,abbr:['prov','pro','pr','prv']},
+{name:'Ecclesiastes',test:'OT',chapters:12,abbr:['eccl','ecc','eccles','qoh']},
+{name:'Song of Solomon',test:'OT',chapters:8,abbr:['song','sos','songofsongs','canticles','cant']},
+{name:'Isaiah',test:'OT',chapters:66,abbr:['isa','is']},
+{name:'Jeremiah',test:'OT',chapters:52,abbr:['jer','je']},
+{name:'Lamentations',test:'OT',chapters:5,abbr:['lam','la']},
+{name:'Ezekiel',test:'OT',chapters:48,abbr:['ezek','eze','ezk']},
+{name:'Daniel',test:'OT',chapters:12,abbr:['dan','da','dn']},
+{name:'Hosea',test:'OT',chapters:14,abbr:['hos','ho']},
+{name:'Joel',test:'OT',chapters:3,abbr:['jl']},
+{name:'Amos',test:'OT',chapters:9,abbr:['am']},
+{name:'Obadiah',test:'OT',chapters:1,abbr:['obad','ob']},
+{name:'Jonah',test:'OT',chapters:4,abbr:['jon','jnh']},
+{name:'Micah',test:'OT',chapters:7,abbr:['mic','mi']},
+{name:'Nahum',test:'OT',chapters:3,abbr:['nah','na']},
+{name:'Habakkuk',test:'OT',chapters:3,abbr:['hab']},
+{name:'Zephaniah',test:'OT',chapters:3,abbr:['zeph','zep','zp']},
+{name:'Haggai',test:'OT',chapters:2,abbr:['hag','hg']},
+{name:'Zechariah',test:'OT',chapters:14,abbr:['zech','zec','zc']},
+{name:'Malachi',test:'OT',chapters:4,abbr:['mal']},
+{name:'Matthew',test:'NT',chapters:28,abbr:['matt','mt']},
+{name:'Mark',test:'NT',chapters:16,abbr:['mk','mr']},
+{name:'Luke',test:'NT',chapters:24,abbr:['lk']},
+{name:'John',test:'NT',chapters:21,abbr:['jn','jhn','joh']},
+{name:'Acts',test:'NT',chapters:28,abbr:['ac']},
+{name:'Romans',test:'NT',chapters:16,abbr:['rom','ro','rm']},
+{name:'1 Corinthians',test:'NT',chapters:16,abbr:['1cor','1co','1corinthians']},
+{name:'2 Corinthians',test:'NT',chapters:13,abbr:['2cor','2co','2corinthians']},
+{name:'Galatians',test:'NT',chapters:6,abbr:['gal','ga']},
+{name:'Ephesians',test:'NT',chapters:6,abbr:['eph']},
+{name:'Philippians',test:'NT',chapters:4,abbr:['phil','php']},
+{name:'Colossians',test:'NT',chapters:4,abbr:['col']},
+{name:'1 Thessalonians',test:'NT',chapters:5,abbr:['1thess','1th','1thes','1thessalonians']},
+{name:'2 Thessalonians',test:'NT',chapters:3,abbr:['2thess','2th','2thes','2thessalonians']},
+{name:'1 Timothy',test:'NT',chapters:6,abbr:['1tim','1ti','1timothy']},
+{name:'2 Timothy',test:'NT',chapters:4,abbr:['2tim','2ti','2timothy']},
+{name:'Titus',test:'NT',chapters:3,abbr:['tit']},
+{name:'Philemon',test:'NT',chapters:1,abbr:['philem','phm']},
+{name:'Hebrews',test:'NT',chapters:13,abbr:['heb']},
+{name:'James',test:'NT',chapters:5,abbr:['jas','jm']},
+{name:'1 Peter',test:'NT',chapters:5,abbr:['1pet','1pe','1peter','1pt']},
+{name:'2 Peter',test:'NT',chapters:3,abbr:['2pet','2pe','2peter','2pt']},
+{name:'1 John',test:'NT',chapters:5,abbr:['1jn','1john','1jo']},
+{name:'2 John',test:'NT',chapters:1,abbr:['2jn','2john','2jo']},
+{name:'3 John',test:'NT',chapters:1,abbr:['3jn','3john','3jo']},
+{name:'Jude',test:'NT',chapters:1,abbr:['jud']},
+{name:'Revelation',test:'NT',chapters:22,abbr:['rev','re','apoc']},
+{name:'1 Esdras',test:'AP',chapters:9,abbr:['1esd','1esdr','1esdras']},
+{name:'2 Esdras',test:'AP',chapters:16,abbr:['2esd','2esdr','2esdras']},
+{name:'Tobit',test:'AP',chapters:14,abbr:['tob']},
+{name:'Judith',test:'AP',chapters:16,abbr:['jdt','jth']},
+{name:'Additions to Esther',test:'AP',chapterList:[10,11,12,13,14,15,16],abbr:['addesth','restofesther','esthergreek']},
+{name:'Wisdom of Solomon',test:'AP',chapters:19,abbr:['wis','wisd','wisdom']},
+{name:'Ecclesiasticus',test:'AP',chapters:51,abbr:['ecclus','sir','sirach']},
+{name:'Baruch',test:'AP',chapters:5,abbr:['bar']},
+{name:'Letter of Jeremiah',test:'AP',chapters:1,abbr:['letjer','epjer','epistlejeremiah']},
+{name:'Prayer of Azariah',test:'AP',chapters:1,abbr:['prazar','songofthree','azariah']},
+{name:'Susanna',test:'AP',chapters:1,abbr:['sus']},
+{name:'Bel and the Dragon',test:'AP',chapters:1,abbr:['bel']},
+{name:'Prayer of Manasseh',test:'AP',chapters:1,abbr:['prman','manasseh']},
+{name:'1 Maccabees',test:'AP',chapters:16,abbr:['1macc','1mac','1maccabees']},
+{name:'2 Maccabees',test:'AP',chapters:15,abbr:['2macc','2mac','2maccabees']}
+];
+function bookChapterList(b){return b.chapterList||Array.from({length:b.chapters},(_,i)=>i+1)}
+function normNumeralPrefix(s){
+  return s.replace(/\b(I{1,3}|1st|2nd|3rd|First|Second|Third)[\s.]+(?=[A-Za-z])/gi,(m,n)=>{
+    const map={i:'1','1st':'1',first:'1',ii:'2','2nd':'2',second:'2',iii:'3','3rd':'3',third:'3'};
+    return (map[n.toLowerCase()]||n)+' ';
+  });
+}
+const BOOK_LOOKUP=(()=>{
+  const m={};
+  BIBLE_BOOKS.forEach(b=>{
+    const forms=[b.name, ...(b.abbr||[])];
+    forms.forEach(f=>{
+      const key=f.toLowerCase().replace(/[.\s]/g,'');
+      m[key]=b;
+    });
+  });
+  return m;
+})();
+const BOOK_REGEX=(()=>{
+  const alts=[];
+  BIBLE_BOOKS.forEach(b=>{
+    const forms=[b.name, ...(b.abbr||[])];
+    forms.forEach(f=>{
+      // allow flexible spacing/period between a leading number and the rest, and between words
+      const esc=f.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+      const pat=esc.replace(/^(\d)/,'$1\\s*').replace(/\s+/g,'\\s+');
+      alts.push(pat);
+    });
+  });
+  alts.sort((a,b)=>b.length-a.length);
+  return alts.join('|');
+})();
+function canonicalBook(token){
+  const key=token.toLowerCase().replace(/[.\s]/g,'');
+  const b=BOOK_LOOKUP[key];
+  return b?b.name:null;
+}
+function refLabel(r){
+  if(r.verses&&r.verses.length){
+    return `${r.book} ${r.chStart}:${r.verses.join(', ')}`;
+  }
+  if(!r.vStart){
+    return r.chStart?`${r.book} ${r.chStart}`:r.book;
+  }
+  if(r.chStart===r.chEnd&&(!r.vEnd||r.vEnd===r.vStart)){
+    return `${r.book} ${r.chStart}:${r.vStart}`;
+  }
+  if(r.chStart===r.chEnd){
+    return `${r.book} ${r.chStart}:${r.vStart}-${r.vEnd}`;
+  }
+  return `${r.book} ${r.chStart}:${r.vStart}-${r.chEnd}:${r.vEnd}`;
+}
+function refsEqual(a,b){return refLabel(a)===refLabel(b)}
+function buildVerseGroup(book,ch,vStart,commaList){
+  const nums=[+vStart];
+  commaList.split(',').map(s=>s.trim()).filter(Boolean).forEach(p=>{
+    const m=p.match(/^(\d+)\s*[-–—]\s*(\d+)$/);
+    if(m){for(let v=+m[1];v<=+m[2];v++)nums.push(v)}
+    else nums.push(+p);
+  });
+  const uniq=[...new Set(nums)].sort((a,b)=>a-b);
+  return{book,chStart:+ch,vStart:uniq[0],chEnd:+ch,vEnd:uniq[uniq.length-1],verses:uniq};
+}
+// Auto-detect: only matches EXPLICIT chapter:verse citations (never bare "Book 5" mentions,
+// and never tries to infer a reference from unmarked scripture text).
+function detectScriptureRefs(text){
+  if(!text||!BOOK_REGEX)return[];
+  const norm=normNumeralPrefix(text);
+  const re=new RegExp('\\b('+BOOK_REGEX+')\\.?\\s+(\\d{1,3})\\s*:\\s*(\\d{1,3})(?:\\s*[-–—]\\s*(?:(\\d{1,3})\\s*:\\s*(\\d{1,3})|(\\d{1,3}))|((?:\\s*,\\s*\\d{1,3}(?:\\s*[-–—]\\s*\\d{1,3})?)+))?','gi');
+  const out=[];const seen=new Set();
+  let m;
+  while((m=re.exec(norm))){
+    const book=canonicalBook(m[1]);
+    if(!book)continue;
+    const ch=m[2],vStart=m[3];
+    let ref;
+    if(m[4]&&m[5])ref={book,chStart:+ch,vStart:+vStart,chEnd:+m[4],vEnd:+m[5]};
+    else if(m[6])ref={book,chStart:+ch,vStart:+vStart,chEnd:+ch,vEnd:+m[6]};
+    else if(m[7])ref=buildVerseGroup(book,ch,vStart,m[7]);
+    else ref={book,chStart:+ch,vStart:+vStart,chEnd:+ch,vEnd:+vStart};
+    const lbl=refLabel(ref);
+    if(!seen.has(lbl)){seen.add(lbl);out.push(ref)}
+  }
+  return out;
+}
+// Manual free-text parse: same engine, but also allows a bare "Book Chapter" (no verse) since
+// the user typed it deliberately.
+function parseScriptureRefText(text){
+  const detected=detectScriptureRefs(text);
+  if(detected.length)return detected[0];
+  const norm=normNumeralPrefix((text||'').trim());
+  const re=new RegExp('^('+BOOK_REGEX+')\\.?\\s+(\\d{1,3})$','i');
+  const m=norm.match(re);
+  if(m){const book=canonicalBook(m[1]);if(book)return{book,chStart:+m[2],vStart:null,chEnd:+m[2],vEnd:null}}
+  return null;
+}
+// Parses a partial query like "John", "John 3", "John 3:16", "John 3:16-21" for library filtering.
+function parseScriptureQuery(q){
+  q=(q||'').trim();
+  if(!q)return null;
+  const norm=normNumeralPrefix(q);
+  const m=norm.match(new RegExp('^('+BOOK_REGEX+')\\.?\\s*(\\d{1,3})?\\s*(?::\\s*(\\d{1,3})(?:\\s*[-–—]\\s*(\\d{1,3}))?)?\\s*$','i'));
+  if(!m)return null;
+  const book=canonicalBook(m[1]);if(!book)return null;
+  const ch=m[2]?+m[2]:null, vs=m[3]?+m[3]:null;
+  return{book,ch,vs,ve:m[4]?+m[4]:vs};
+}
+function refMatchesQuery(r,q){
+  if(!q)return true;
+  if(r.book!==q.book)return false;
+  if(q.ch==null)return true;
+  if(q.ch<r.chStart||q.ch>r.chEnd)return false;
+  if(q.vs==null)return true;
+  if(r.verses&&r.verses.length)return r.verses.some(v=>v>=q.vs&&v<=q.ve);
+  const spanStart=(q.ch===r.chStart)?(r.vStart||1):1;
+  const spanEnd=(q.ch===r.chEnd)?(r.vEnd||9999):9999;
+  return q.vs<=spanEnd&&q.ve>=spanStart;
 }
 
 /* ================= citations ================= */
@@ -452,15 +678,17 @@ function nav(v){
 function renderAll(){renderEditor();renderLibrary();}
 
 /* ================= editor ================= */
-function blankNote(){return{id:null,work_id:null,quote_html:'',note_html:'',locators:[],tags:[],purposes:[],purpose_values:{},chapter_title:'',chapter_author:'',date_added:new Date().toISOString()}}
+function blankNote(){return{id:null,work_id:null,quote_html:'',note_html:'',locators:[],scripture_refs:[],tags:[],purposes:[],purpose_values:{},chapter_title:'',chapter_author:'',date_added:new Date().toISOString()}}
 async function newNote(){await flushSave();CUR=blankNote();nav('editor');renderEditor()}
 async function editNote(id){await flushSave();CUR=JSON.parse(JSON.stringify(DB.notes.find(n=>n.id===id)));nav('editor');renderEditor()}
 const tagChip=t=>`<span class="chip on">${esc(t)}<span class="x" onclick="rmTag('${esc(t).replace(/'/g,"\\'")}')">×</span></span>`;
 const pinChip=t=>`<span class="chip ${CUR.tags.includes(t)?'on':''}" onclick="toggleTag('${esc(t).replace(/'/g,"\\'")}')">${esc(t)}</span>`;
 const locChip=(l,i)=>`<span class="chip">${esc(LOC_TYPES[l.type]||l.type)}: ${esc(l.value)}<span class="x" onclick="rmLoc(${i})">×</span></span>`;
+const scriptureChip=(r,i)=>`<span class="chip">📖 ${esc(refLabel(r))}<span class="x" onclick="rmScriptureRef(${i})">×</span></span>`;
 
 function renderEditor(){
   if(!CUR)CUR=blankNote();
+  if(!CUR.scripture_refs)CUR.scripture_refs=[];
   const w=W(CUR.work_id);
   const selAuthor=w?(contribs(w.id,'author')[0]||contribs(w.id,'editor')[0]||{}).id:CUR._authorSel;
   const authorOpts=DB.people.map(p=>`<option value="${p.id}" ${p.id===selAuthor?'selected':''}>${esc(invertName(p))}</option>`).join('');
@@ -472,6 +700,7 @@ function renderEditor(){
   const curTags=CUR.tags.map(tagChip).join('');
   const purpChips=DB.purposes.map(p=>`<span class="chip ${CUR.purposes.includes(p.name)?'on':''}" onclick="togglePurpose('${esc(p.name).replace(/'/g,"\\'")}')">${esc(p.name)}</span>`).join('');
   const locRows=(CUR.locators||[]).map(locChip).join('');
+  const scrRows=(CUR.scripture_refs||[]).map(scriptureChip).join('');
   $('view-editor').innerHTML=`
   <div id="ribbon">
     <div class="rib-row">
@@ -502,6 +731,30 @@ function renderEditor(){
         <input id="ed-chauthor" placeholder="Chapter author" value="${esc(CUR.chapter_author)}" onchange="CUR.chapter_author=this.value;refreshCite()" style="width:150px"></div></div>
       <div class="fieldcol"><label>Purpose</label><div class="row">${purpChips||'<span class="muted small">none defined</span>'}</div></div>
     </div>
+    <div class="rib-row">
+      <div class="fieldcol" style="flex:1">
+        <label>Scripture references</label>
+        <div class="row" style="flex-wrap:wrap"><span id="scr-chips" class="row">${scrRows}</span></div>
+        <div class="row" style="margin-top:4px;flex-wrap:wrap">
+          <select id="scr-test" onchange="scrTestChange()">
+            <option value="OT">Old Testament</option>
+            <option value="NT">New Testament</option>
+            <option value="AP">Apocrypha</option>
+          </select>
+          <select id="scr-book" onchange="scrBookChange()"></select>
+          <select id="scr-ch"></select>
+          <span class="small muted">:</span>
+          <input id="scr-vs" placeholder="verse" style="width:56px" onkeydown="if(event.key==='Enter'){event.preventDefault();addScriptureRef()}">
+          <span class="small muted">–</span>
+          <input id="scr-ve" placeholder="end (opt.)" style="width:72px" onkeydown="if(event.key==='Enter'){event.preventDefault();addScriptureRef()}">
+          <button class="btn sm sec" onclick="addScriptureRef()">Add</button>
+        </div>
+        <div class="row" style="margin-top:4px">
+          <input id="scr-text" placeholder="or type directly, e.g. John 3:16-21" style="width:230px" onkeydown="if(event.key==='Enter'){event.preventDefault();addScriptureRefFromText()}">
+          <button class="btn sm sec" onclick="addScriptureRefFromText()">Add</button>
+        </div>
+      </div>
+    </div>
     <div id="purpose-fields"></div>
     <div class="rib-row">
       <div class="fieldcol" style="flex:1"><label>Tags</label><div class="row">
@@ -527,7 +780,49 @@ function renderEditor(){
   $('rte-n').innerHTML=CUR.note_html||'';
   ['q','n'].forEach(k=>{const el=$('rte-'+k);el.addEventListener('input',()=>{dirty=true;scheduleSave()});el.addEventListener('paste',sanitizePaste);el.addEventListener('keydown',rteShortcut)});
   renderPurposeFields();
+  initScriptureSelects();
   const tagIn=$('tag-in');if(tagIn)makeAutocomplete(tagIn,allTags,{onEnter:v=>{tagIn.value=v;addTagFromInput()}});
+}
+function scriptureBookOptions(test){return BIBLE_BOOKS.filter(b=>b.test===test).map(b=>`<option value="${esc(b.name)}">${esc(b.name)}</option>`).join('')}
+function scriptureChapterOptions(bookName){const b=BIBLE_BOOKS.find(x=>x.name===bookName);if(!b)return'';return bookChapterList(b).map(c=>`<option value="${c}">${c}</option>`).join('')}
+function initScriptureSelects(){const t=$('scr-test');if(!t)return;t.value='OT';scrTestChange()}
+function scrTestChange(){const test=$('scr-test').value;const bookEl=$('scr-book');bookEl.innerHTML=scriptureBookOptions(test);scrBookChange()}
+function scrBookChange(){const book=$('scr-book').value;$('scr-ch').innerHTML=scriptureChapterOptions(book)}
+function addScriptureRefObj(ref){
+  CUR.scripture_refs=CUR.scripture_refs||[];
+  const lbl=refLabel(ref);
+  if(CUR.scripture_refs.some(r=>refLabel(r)===lbl)){toast('Already added');return}
+  CUR.scripture_refs.push(ref);
+  updateScriptureRow();
+}
+function addScriptureRef(){
+  const book=$('scr-book').value,ch=$('scr-ch').value;
+  const vsEl=$('scr-vs'),veEl=$('scr-ve');
+  const vs=(vsEl.value||'').trim(),ve=(veEl.value||'').trim();
+  if(!book||!ch){toast('Choose a book and chapter');return}
+  const ref=!vs?{book,chStart:+ch,vStart:null,chEnd:+ch,vEnd:null}:{book,chStart:+ch,vStart:+vs,chEnd:+ch,vEnd:ve?+ve:+vs};
+  addScriptureRefObj(ref);
+  vsEl.value='';veEl.value='';
+}
+function addScriptureRefFromText(){
+  const el=$('scr-text');const v=(el.value||'').trim();if(!v)return;
+  const ref=parseScriptureRefText(v);
+  if(!ref){toast("Couldn't parse a reference from that — try \"Book Chapter:Verse\"");return}
+  addScriptureRefObj(ref);
+  el.value='';
+}
+function rmScriptureRef(i){CUR.scripture_refs.splice(i,1);updateScriptureRow()}
+function updateScriptureRow(){const el=$('scr-chips');if(el)el.innerHTML=(CUR.scripture_refs||[]).map(scriptureChip).join('');scheduleSave()}
+function autoDetectScripture(k){
+  syncPanes();
+  const html=k==='q'?CUR.quote_html:CUR.note_html;
+  const found=detectScriptureRefs(stripHtml(html));
+  CUR.scripture_refs=CUR.scripture_refs||[];
+  const existing=new Set(CUR.scripture_refs.map(refLabel));
+  let added=0;
+  found.forEach(r=>{const lbl=refLabel(r);if(!existing.has(lbl)){existing.add(lbl);CUR.scripture_refs.push(r);added++}});
+  updateScriptureRow();
+  toast(added?`Added ${added} reference${added===1?'':'s'}`:'No new explicit references found');
 }
 function rteShortcut(e){
   const mod=e.metaKey||e.ctrlKey;
@@ -573,7 +868,8 @@ function rteBar(k){
     `<button class="tbtn" style="background:var(--hl)" onmousedown="event.preventDefault();fmt('hiliteColor','','#fdf0a8')" title="highlight">✺</button>`+
     `<button class="tbtn" onmousedown="event.preventDefault();fmt('hiliteColor','','transparent')" title="remove highlight">⌫✺</button>`+
     `<button class="tbtn" onmousedown="event.preventDefault();fmt('removeFormat')" title="clear formatting">Tx</button>`+
-    `<button class="tbtn" onmousedown="event.preventDefault();captureSelAndOpenCleanup('${k}')" title="clean up pasted text">🧹</button>`;
+    `<button class="tbtn" onmousedown="event.preventDefault();captureSelAndOpenCleanup('${k}')" title="clean up pasted text">🧹</button>`+
+    `<button class="tbtn" onmousedown="event.preventDefault();autoDetectScripture('${k}')" title="find scripture references (explicit chapter:verse only)">📖+</button>`;
 }
 function fmt(cmd,_,arg){document.execCommand(cmd,false,arg||null)}
 function syncPanes(){CUR.quote_html=$('rte-q').innerHTML;CUR.note_html=$('rte-n').innerHTML}
@@ -621,7 +917,7 @@ async function saveNote(auto){
   clearTimeout(saveTimer);saveTimer=null;
   syncPanes();
   if(!stripHtml(CUR.quote_html).trim()&&!stripHtml(CUR.note_html).trim()){if(!auto)toast('Nothing to save');return}
-  const rec={work_id:CUR.work_id,quote_html:CUR.quote_html,note_html:CUR.note_html,locators:CUR.locators,tags:CUR.tags,purposes:CUR.purposes,purpose_values:CUR.purpose_values,chapter_title:CUR.chapter_title,chapter_author:CUR.chapter_author,updated_at:new Date().toISOString()};
+  const rec={work_id:CUR.work_id,quote_html:CUR.quote_html,note_html:CUR.note_html,locators:CUR.locators,scripture_refs:CUR.scripture_refs||[],tags:CUR.tags,purposes:CUR.purposes,purpose_values:CUR.purpose_values,chapter_title:CUR.chapter_title,chapter_author:CUR.chapter_author,updated_at:new Date().toISOString()};
   if(CUR.id){
     const{error}=await sb.from('notes').update(rec).eq('id',CUR.id);
     if(error){toast(error.message);return}
@@ -990,14 +1286,14 @@ async function finishKindleImport(wid,ki){
 
 <script>
 /* ================= library ================= */
-let LIB={q:'',inQ:true,inN:true,inT:true,tags:[],purpose:'',work:'',person:'',sort:'new',selMode:false,sel:new Set(),pf:{}};
+let LIB={q:'',inQ:true,inN:true,inT:true,tags:[],purpose:'',work:'',person:'',scripture:'',sort:'new',selMode:false,sel:new Set(),pf:{}};
 try{const _ls=JSON.parse(localStorage.getItem('nob_lib')||'null');if(_ls){Object.assign(LIB,_ls);LIB.sel=new Set();LIB.selMode=false}}catch(e){}
-function saveLibState(){try{localStorage.setItem('nob_lib',JSON.stringify({q:LIB.q,inQ:LIB.inQ,inN:LIB.inN,inT:LIB.inT,tags:LIB.tags,purpose:LIB.purpose,work:LIB.work,person:LIB.person,sort:LIB.sort,pf:LIB.pf}))}catch(e){}}
-function libSnapshot(){return{q:LIB.q,inQ:LIB.inQ,inN:LIB.inN,inT:LIB.inT,tags:[...LIB.tags],purpose:LIB.purpose,work:LIB.work,person:LIB.person,sort:LIB.sort,pf:JSON.parse(JSON.stringify(LIB.pf||{}))}}
+function saveLibState(){try{localStorage.setItem('nob_lib',JSON.stringify({q:LIB.q,inQ:LIB.inQ,inN:LIB.inN,inT:LIB.inT,tags:LIB.tags,purpose:LIB.purpose,work:LIB.work,person:LIB.person,scripture:LIB.scripture,sort:LIB.sort,pf:LIB.pf}))}catch(e){}}
+function libSnapshot(){return{q:LIB.q,inQ:LIB.inQ,inN:LIB.inN,inT:LIB.inT,tags:[...LIB.tags],purpose:LIB.purpose,work:LIB.work,person:LIB.person,scripture:LIB.scripture,sort:LIB.sort,pf:JSON.parse(JSON.stringify(LIB.pf||{}))}}
 function applyView(id){if(!id)return;const v=(DB.settings.saved_filters||[]).find(x=>x.id===id);if(!v)return;Object.assign(LIB,JSON.parse(JSON.stringify(v.filters)));if(!LIB.pf)LIB.pf={};LIB.sel=new Set();renderLibrary()}
 function saveView(){const name=prompt('Name this view (current search, filters, and sort will be saved):');if(!name)return;DB.settings.saved_filters=DB.settings.saved_filters||[];DB.settings.saved_filters.push({id:'v_'+Date.now().toString(36),name:name.trim(),filters:libSnapshot()});saveSettings();renderLibrary();toast('View saved')}
 function deleteView(){const el=$('lib-views');if(!el||!el.value){toast('Choose a saved view first');return}const v=(DB.settings.saved_filters||[]).find(x=>x.id===el.value);if(!confirm(`Delete saved view "${v?v.name:''}"?`))return;DB.settings.saved_filters=DB.settings.saved_filters.filter(x=>x.id!==el.value);saveSettings();renderLibrary()}
-function gotoWorkNotes(wid){LIB.q='';LIB.tags=[];LIB.purpose='';LIB.person='';LIB.work=wid;LIB.sort='page';LIB.selMode=false;LIB.sel=new Set();LIB.pf={};nav('library')}
+function gotoWorkNotes(wid){LIB.q='';LIB.tags=[];LIB.purpose='';LIB.person='';LIB.scripture='';LIB.work=wid;LIB.sort='page';LIB.selMode=false;LIB.sel=new Set();LIB.pf={};nav('library')}
 function sortNotes(arr){
   const st=LIB.sort||'new';
   const firstPage=n=>{const l=(n.locators||[]).find(x=>x.type==='page');const v=l?parseFloat(String(l.value).replace(/[^\d.]/g,'')):NaN;return isNaN(v)?Infinity:v};
@@ -1093,6 +1389,7 @@ function renderLibrary(){
         <option value="">any work</option>
         ${DB.works.map(w=>`<option value="${w.id}" ${LIB.work===w.id?'selected':''}>${esc(w.title)}</option>`).join('')}
       </select>
+      <input id="lib-scr" placeholder="Scripture (e.g. John 3:16)" value="${esc(LIB.scripture)}" style="width:180px" oninput="LIB.scripture=this.value;renderLibResults()">
       <select onchange="LIB.sort=this.value;renderLibrary()" title="Sort order">
         ${[['new','newest first'],['old','oldest first'],['author','sort: author'],['title','sort: title'],['year','sort: pub date'],['page','sort: work + page']].map(([v,l])=>`<option value="${v}" ${LIB.sort===v?'selected':''}>${l}</option>`).join('')}
       </select>
@@ -1102,7 +1399,7 @@ function renderLibrary(){
     <div class="rib-row"><span class="small muted" style="align-self:center">Filter tags (AND):</span>
       ${topTags.map(t=>`<span class="chip ${LIB.tags.includes(t)?'on':''}" onclick="libTag('${esc(t).replace(/'/g,"\\'")}')">${esc(t)}</span>`).join('')}
       <input id="lib-tag-in" placeholder="+ tag filter" style="width:110px">
-      ${LIB.tags.length||LIB.q||LIB.purpose||LIB.person||LIB.work||Object.keys(LIB.pf||{}).length?'<button class="btn sm sec" onclick="clearLib()">Clear filters</button>':''}
+      ${LIB.tags.length||LIB.q||LIB.purpose||LIB.person||LIB.work||LIB.scripture||Object.keys(LIB.pf||{}).length?'<button class="btn sm sec" onclick="clearLib()">Clear filters</button>':''}
       <span style="flex:1"></span>
       <select id="lib-views" onchange="applyView(this.value)">
         <option value="">saved views…</option>
@@ -1125,7 +1422,7 @@ function renderLibrary(){
   wireBulkBarAutocomplete();
 }
 function libTag(t){LIB.tags.includes(t)?LIB.tags=LIB.tags.filter(x=>x!==t):LIB.tags.push(t);renderLibrary()}
-function clearLib(){LIB={q:'',inQ:true,inN:true,inT:true,tags:[],purpose:'',work:'',person:'',sort:LIB.sort,selMode:false,sel:new Set(),pf:{}};renderLibrary()}
+function clearLib(){LIB={q:'',inQ:true,inN:true,inT:true,tags:[],purpose:'',work:'',person:'',scripture:'',sort:LIB.sort,selMode:false,sel:new Set(),pf:{}};renderLibrary()}
 function filterableFields(){
   const out=[];
   DB.purposes.forEach(p=>(p.fields||[]).forEach(f=>{if(f.filterable)out.push({purpose:p.name,key:f.key,label:f.label})}));
@@ -1152,6 +1449,11 @@ function libResults(){
     if(LIB.person){const w=W(n.work_id);if(!w||!DB.wc.some(c=>c.work_id===w.id&&c.person_id===LIB.person))return false}
     if(LIB.purpose&&!(n.purposes||[]).includes(LIB.purpose))return false;
     if(LIB.tags.length&&!LIB.tags.every(t=>(n.tags||[]).includes(t)))return false;
+    if(LIB.scripture&&LIB.scripture.trim()){
+      const sq=parseScriptureQuery(LIB.scripture);
+      if(!sq)return false;
+      if(!(n.scripture_refs||[]).some(r=>refMatchesQuery(r,sq)))return false;
+    }
     for(const pkey in(LIB.pf||{})){
       const sep=pkey.indexOf('|'), purpose=pkey.slice(0,sep), key=pkey.slice(sep+1);
       const nv=n.purpose_values&&n.purpose_values[purpose]&&n.purpose_values[purpose][key];
@@ -1193,6 +1495,7 @@ function renderLibResults(){
       <div class="meta">
         ${LIB.selMode?`<input type="checkbox" ${LIB.sel.has(n.id)?'checked':''} onclick="selNote('${n.id}',this.checked)" style="width:18px;height:18px;margin:0">`:''}
         ${(n.purposes||[]).map(p=>'<span class="badge gray">'+esc(p)+'</span>').join('')}
+        ${(n.scripture_refs||[]).map(r=>'<span class="badge gray">📖 '+esc(refLabel(r))+'</span>').join('')}
         ${(n.tags||[]).map(t=>`<span class="chip" onclick="libTag('${esc(t).replace(/'/g,"\\'")}')">${esc(t)}</span>`).join('')}
         <span style="flex:1"></span>
         <button class="btn sm sec" onclick="copyNote(DB.notes.find(x=>x.id==='${n.id}'),'quote')">Quote</button>
@@ -1363,7 +1666,7 @@ function renderSettings(){
   </div>
   <div class="card set-section">
     <h3>Account</h3>
-    <p class="small muted">${esc((USER&&USER.email)||'')} · Notes on Books v1.5</p>
+    <p class="small muted">${esc((USER&&USER.email)||'')} · Notes on Books v1.6</p>
     <button class="btn sec" onclick="sb.auth.signOut().then(()=>location.reload())">Sign out</button>
   </div>`;
   const pinIn=$('pin-in');if(pinIn)makeAutocomplete(pinIn,allTags,{onEnter:v=>{pinIn.value=v;pin(v)}});
@@ -1456,11 +1759,11 @@ function exportJSON(){
 }
 function exportCSV(){
   const q=s=>'"'+String(s??'').replace(/"/g,'""')+'"';
-  const rows=[['Date','Author(s)','Work','Quote','Note','Locators','Tags','Purposes','Citation (footnote)','Bibliography']];
+  const rows=[['Date','Author(s)','Work','Quote','Note','Locators','Scripture refs','Tags','Purposes','Citation (footnote)','Bibliography']];
   DB.notes.forEach(n=>{
     const w=W(n.work_id);
     rows.push([(n.date_added||'').slice(0,10),w?contribs(w.id,'author').map(p=>p.name).join('; '):'',w?w.title:'',
-      stripHtml(n.quote_html),stripHtml(n.note_html),locatorStr(n.locators),(n.tags||[]).join('; '),(n.purposes||[]).join('; '),
+      stripHtml(n.quote_html),stripHtml(n.note_html),locatorStr(n.locators),(n.scripture_refs||[]).map(refLabel).join('; '),(n.tags||[]).join('; '),(n.purposes||[]).join('; '),
       citeNoteObj(n,'note').text,citeNoteObj(n,'bib').text]);
   });
   dl('notes-on-books-'+new Date().toISOString().slice(0,10)+'.csv','﻿'+rows.map(r=>r.map(q).join(',')).join('\r\n'),'text/csv');
@@ -1494,7 +1797,7 @@ async function importJSON(file){
     }
     st.textContent='Importing notes…';
     for(let i=0;i<j.notes.length;i+=100){
-      const{error}=await sb.from('notes').upsert(j.notes.slice(i,i+100).map(n=>clean(n,['id','work_id','quote_html','note_html','locators','tags','purposes','purpose_values','chapter_title','chapter_author','date_added'])));
+      const{error}=await sb.from('notes').upsert(j.notes.slice(i,i+100).map(n=>clean(n,['id','work_id','quote_html','note_html','locators','scripture_refs','tags','purposes','purpose_values','chapter_title','chapter_author','date_added'])));
       if(error)throw error;
     }
     if(j.purposes)for(const p of j.purposes){
