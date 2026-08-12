@@ -12,7 +12,7 @@
 :root{
   --bg:#faf8f4; --panel:#ffffff; --ink:#2b2620; --muted:#8a8177; --line:#e5dfd5;
   --accent:#7c5c3e; --accent2:#a4834f; --chip:#efe9df; --chip-on:#7c5c3e; --danger:#a04030;
-  --hl:#fdf0a8; --badge:#c2703d; --serif:'Iowan Old Style',Georgia,'Times New Roman',serif;
+  --hl:#fdf0a8; --hl-search:#b6e2ab; --badge:#c2703d; --serif:'Iowan Old Style',Georgia,'Times New Roman',serif;
   --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
 }
 *{box-sizing:border-box}
@@ -41,6 +41,7 @@ h1,h2,h3{font-family:var(--serif);font-weight:600}
 .badge{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:5px;background:var(--badge);color:#fff;text-transform:uppercase;letter-spacing:.05em}
 .badge.gray{background:var(--muted)}
 mark{background:var(--hl)}
+mark.lib-hit{background:var(--hl-search)}
 /* ---------- centered auth/setup ---------- */
 .center-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
 .center-wrap .card{width:100%;max-width:430px}
@@ -707,6 +708,14 @@ function renderAll(){renderEditor();renderLibrary();}
 /* ================= editor ================= */
 function blankNote(){return{id:null,work_id:null,quote_html:'',note_html:'',locators:[],scripture_refs:[],tags:[],purposes:[],purpose_values:{},chapter_title:'',chapter_author:'',date_added:new Date().toISOString()}}
 async function newNote(){await flushSave();CUR=blankNote();nav('editor');renderEditor()}
+async function newNoteSameAuthor(){
+  if(!CUR||!CUR.work_id)return;
+  const wid=CUR.work_id,authorSel=CUR._authorSel,purposes=[...(CUR.purposes||[])];
+  await flushSave();
+  CUR=blankNote();
+  CUR.work_id=wid;CUR._authorSel=authorSel;CUR.purposes=purposes;
+  nav('editor');renderEditor();
+}
 async function editNote(id){await flushSave();CUR=JSON.parse(JSON.stringify(DB.notes.find(n=>n.id===id)));nav('editor');renderEditor()}
 const tagChip=t=>`<span class="chip on">${esc(t)}<span class="x" onclick="rmTag('${esc(t).replace(/'/g,"\\'")}')">×</span></span>`;
 const pinChip=t=>`<span class="chip ${CUR.tags.includes(t)?'on':''}" onclick="toggleTag('${esc(t).replace(/'/g,"\\'")}')">${esc(t)}</span>`;
@@ -798,6 +807,7 @@ function renderEditor(){
   </div>
   <div class="row" style="margin-top:12px">
     <button class="btn" onclick="saveNote()">💾 Save now</button>
+    <button class="btn sec" ${CUR.work_id?'':'disabled style="opacity:.5;cursor:default"'} onclick="newNoteSameAuthor()" title="${CUR.work_id?'Start a new note with the same author, work, and purpose':'Select a work first'}">New (same author)</button>
     <button class="btn sec" onclick="newNote()">New</button>
     ${CUR.id?'<button class="btn danger" onclick="deleteNote()">Delete</button>':''}
     <span class="muted small">${CUR.id?'Editing existing note':'New note'} · autosaves as you type · ${new Date(CUR.date_added).toLocaleDateString()}</span>
@@ -894,11 +904,32 @@ function rteBar(k){
   return b('bold','<b>B</b>')+b('italic','<i>I</i>')+b('underline','<u>U</u>')+
     `<button class="tbtn" style="background:var(--hl)" onmousedown="event.preventDefault();fmt('hiliteColor','','#fdf0a8')" title="highlight">✺</button>`+
     `<button class="tbtn" onmousedown="event.preventDefault();fmt('hiliteColor','','transparent')" title="remove highlight">⌫✺</button>`+
-    `<button class="tbtn" onmousedown="event.preventDefault();fmt('removeFormat')" title="clear formatting">Tx</button>`+
+    `<button class="tbtn" onmousedown="event.preventDefault();clearFormatting('${k}')" title="clear formatting — clears the selection, or the whole box if nothing's selected">Tx</button>`+
     `<button class="tbtn" onmousedown="event.preventDefault();captureSelAndOpenCleanup('${k}')" title="clean up pasted text">🧹</button>`+
     `<button class="tbtn" onmousedown="event.preventDefault();autoDetectScripture('${k}')" title="find scripture references (explicit chapter:verse only)">📖+</button>`;
 }
 function fmt(cmd,_,arg){document.execCommand(cmd,false,arg||null)}
+// Remove-formatting (Tx button): if there's an active text selection in this pane, behave as
+// before (execCommand only touches the selection). If nothing's selected, clear formatting from
+// the whole pane instead — rebuilds it as plain paragraphs (via fragText/textToHtml, the same
+// structure-preserving round-trip the whole-element cleanup steps use), stripping bold/italic/
+// underline/highlight while keeping paragraph breaks intact.
+function clearFormatting(k){
+  const el=$('rte-'+k);if(!el)return;
+  const sel=window.getSelection();
+  let hasSel=false;
+  if(sel&&sel.rangeCount){
+    const range=sel.getRangeAt(0);
+    if(!range.collapsed&&el.contains(range.commonAncestorContainer))hasSel=true;
+  }
+  if(hasSel){document.execCommand('removeFormat',false,null)}
+  else{
+    const div=document.createElement('div');div.innerHTML=el.innerHTML;
+    el.innerHTML=textToHtml(fragText(div).trim());
+    if(k==='q')CUR.quote_html=el.innerHTML;else CUR.note_html=el.innerHTML;
+  }
+  dirty=true;scheduleSave();
+}
 function syncPanes(){CUR.quote_html=$('rte-q').innerHTML;CUR.note_html=$('rte-n').innerHTML}
 function refreshCite(){
   syncPanes();
@@ -927,7 +958,7 @@ function renderPurposeFields(){
     p.fields.forEach(f=>{
       const v=vals[f.key]||'';
       if(f.type==='select')
-        h+=`<div class="fieldcol"><label>${esc(f.label)}</label><select onchange="setPV('${esc(pn)}','${esc(f.key)}',this.value)"><option value=""></option>${(f.options||[]).map(o=>`<option ${o===v?'selected':''}>${esc(o)}</option>`).join('')}</select></div>`;
+        h+=`<div class="fieldcol"><label>${esc(f.label)}</label><select style="width:150px" onchange="setPV('${esc(pn)}','${esc(f.key)}',this.value)"><option value=""></option>${(f.options||[]).map(o=>`<option ${o===v?'selected':''}>${esc(o)}</option>`).join('')}</select>${!(f.options||[]).length?'<span class="small muted">no options set — fix in Settings</span>':''}</div>`;
       else
         h+=`<div class="fieldcol"><label>${esc(f.label)}</label><input value="${esc(v)}" onchange="setPV('${esc(pn)}','${esc(f.key)}',this.value)" style="width:150px"></div>`;
     });
@@ -1333,6 +1364,7 @@ function sortNotes(arr){
   else if(st==='title')c.sort((a,b)=>wt(a).localeCompare(wt(b))||firstPage(a)-firstPage(b));
   else if(st==='year')c.sort((a,b)=>yr(a)-yr(b)||wt(a).localeCompare(wt(b))||firstPage(a)-firstPage(b));
   else if(st==='page')c.sort((a,b)=>wt(a).localeCompare(wt(b))||firstPage(a)-firstPage(b));
+  else if(st==='pagenum')c.sort((a,b)=>firstPage(a)-firstPage(b)||wt(a).localeCompare(wt(b)));
   else c.sort((a,b)=>(b.date_added||'').localeCompare(a.date_added||''));
   return c;
 }
@@ -1418,7 +1450,7 @@ function renderLibrary(){
       </select>
       <input id="lib-scr" placeholder="Scripture (e.g. John 3:16)" value="${esc(LIB.scripture)}" style="width:180px" oninput="LIB.scripture=this.value;renderLibResults()">
       <select onchange="LIB.sort=this.value;renderLibrary()" title="Sort order">
-        ${[['new','newest first'],['old','oldest first'],['author','sort: author'],['title','sort: title'],['year','sort: pub date'],['page','sort: work + page']].map(([v,l])=>`<option value="${v}" ${LIB.sort===v?'selected':''}>${l}</option>`).join('')}
+        ${[['new','newest first'],['old','oldest first'],['author','sort: author'],['title','sort: title'],['year','sort: pub date'],['page','sort: work + page'],['pagenum','sort: page number']].map(([v,l])=>`<option value="${v}" ${LIB.sort===v?'selected':''}>${l}</option>`).join('')}
       </select>
       <button class="btn sm ${LIB.selMode?'':'sec'}" onclick="toggleSelMode()">${LIB.selMode?'Done selecting':'☑ Select'}</button>
     </div>
@@ -1503,7 +1535,7 @@ function hl(html){
   q.split(/\s+/).forEach(t=>{
     if(t.length<2)return;
     const re=new RegExp('('+t.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')(?![^<]*>)','gi');
-    out=out.replace(re,'<mark>$1</mark>');
+    out=out.replace(re,'<mark class="lib-hit">$1</mark>');
   });
   return out;
 }
@@ -1699,7 +1731,7 @@ function renderSettings(){
   </div>
   <div class="card set-section">
     <h3>Account</h3>
-    <p class="small muted">${esc((USER&&USER.email)||'')} · Notes on Books v1.10</p>
+    <p class="small muted">${esc((USER&&USER.email)||'')} · Notes on Books v1.11</p>
     <button class="btn sec" onclick="sb.auth.signOut().then(()=>location.reload())">Sign out</button>
   </div>`;
   const pinIn=$('pin-in');if(pinIn)makeAutocomplete(pinIn,allTags,{onEnter:v=>{pinIn.value=v;pin(v)}});
@@ -1727,7 +1759,7 @@ function purpAdminRow(p){
         <option value="text" ${f.type==='text'?'selected':''}>text</option>
         <option value="select" ${f.type==='select'?'selected':''}>dropdown</option>
       </select>
-      ${f.type==='select'?`<input placeholder="options, comma-separated" style="flex:1" value="${esc((f.options||[]).join(', '))}" onchange="updField('${p.id}',${i},'options',this.value)">`:''}
+      ${f.type==='select'?`<input placeholder="options, comma-separated" style="flex:1" value="${esc((f.options||[]).join(', '))}" onchange="updField('${p.id}',${i},'options',this.value)">${!(f.options||[]).length?'<span class="small" style="color:var(--danger);white-space:nowrap">⚠ no options — field is unusable until you add some, or switch it to text</span>':''}`:''}
       <label class="small" style="margin:0;text-transform:none;display:flex;align-items:center;gap:4px;white-space:nowrap"><input type="checkbox" ${f.filterable?'checked':''} onchange="updField('${p.id}',${i},'filterable',this.checked)"> filterable in library</label>
       <button class="btn sm sec" onclick="rmField('${p.id}',${i})">×</button></div>`).join('')}
   </div>`;
