@@ -1,0 +1,666 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Notes on Books — UI mockups</title>
+<style>
+:root{
+  --bg:#faf8f4; --panel:#ffffff; --ink:#2b2620; --muted:#8a8177; --line:#e5dfd5;
+  --accent:#7c5c3e; --accent2:#a4834f; --chip:#efe9df; --chip-on:#7c5c3e; --danger:#a04030;
+  --hl:#fdf0a8; --hl-search:#b6e2ab; --badge:#c2703d;
+  --serif:'Iowan Old Style',Georgia,'Times New Roman',serif;
+  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
+  --rail:250px; --list:330px; --insp:290px;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;overflow:hidden}
+button{font-family:var(--sans);cursor:pointer;color:inherit}
+input,select{font-family:var(--sans);font-size:14px;padding:7px 9px;border:1px solid var(--line);border-radius:7px;background:#fff;color:var(--ink);max-width:100%}
+.muted{color:var(--muted)}
+.small{font-size:12.5px}
+
+/* ---------- mockup switcher ---------- */
+#mockbar{position:fixed;top:0;left:0;right:0;height:52px;z-index:100;background:#2b2620;color:#f5f0e8;
+  display:flex;align-items:center;gap:10px;padding:0 14px;padding-top:env(safe-area-inset-top);
+  height:calc(52px + env(safe-area-inset-top))}
+#mockbar b{font-size:13.5px;letter-spacing:.02em;white-space:nowrap}
+#mockbar .seg{display:flex;background:rgba(255,255,255,.12);border-radius:9px;padding:3px;gap:2px}
+#mockbar .seg button{background:none;border:none;color:#d8cfc2;padding:7px 13px;border-radius:7px;font-size:13.5px;font-weight:600;white-space:nowrap}
+#mockbar .seg button.on{background:#f5f0e8;color:#2b2620}
+#mockbar .note{font-size:12px;color:#a89e90;margin-left:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media(max-width:700px){#mockbar .note{display:none}#mockbar b{display:none}}
+
+#stage{position:fixed;top:calc(52px + env(safe-area-inset-top));left:0;right:0;bottom:0;display:flex;flex-direction:column}
+
+/* ---------- shared app chrome ---------- */
+.appbar{display:flex;align-items:center;gap:6px;padding:7px 12px;background:var(--panel);border-bottom:1px solid var(--line);flex:0 0 auto}
+.brand{font-family:var(--serif);font-weight:700;font-size:16px;margin-right:6px;white-space:nowrap}
+.appbar nav{display:flex;gap:2px}
+.appbar nav button{background:none;border:none;padding:7px 11px;border-radius:8px;font-size:14px;color:var(--muted);font-weight:600}
+.appbar nav button.on{background:var(--chip);color:var(--ink)}
+.btn{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:9px 14px;font-size:14px;font-weight:600}
+.btn.sec{background:var(--chip);color:var(--ink)}
+.btn.sm{padding:6px 10px;font-size:12.5px;border-radius:7px}
+.btn.gho{background:none;border:1px solid var(--line)}
+.spacer{flex:1}
+
+.chip{display:inline-flex;align-items:center;gap:5px;background:var(--chip);border-radius:999px;padding:5px 11px;font-size:12.5px;white-space:nowrap;border:none}
+.chip.on{background:var(--chip-on);color:#fff}
+.chip.x{padding:5px 9px}
+.count{background:var(--accent);color:#fff;border-radius:999px;padding:1px 7px;font-size:11px;font-weight:700;margin-left:5px}
+
+.body{flex:1;display:flex;min-height:0}
+
+/* ---------- result list (shared by all layouts) ---------- */
+.listcol{flex:0 0 var(--list);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0;background:var(--panel)}
+.listhead{padding:8px 11px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px;flex:0 0 auto}
+.listscroll{overflow-y:auto;-webkit-overflow-scrolling:touch;flex:1}
+.row{padding:11px 13px;border-bottom:1px solid var(--line);cursor:pointer;display:block;width:100%;text-align:left;background:none;border-left:3px solid transparent}
+.row:hover{background:#fbf9f6}
+.row.on{background:#f4efe7;border-left-color:var(--accent)}
+.row .r1{font-size:12px;color:var(--muted);display:flex;gap:6px;align-items:baseline;margin-bottom:3px}
+.row .r1 b{color:var(--ink);font-weight:600}
+.row .r2{font-family:var(--serif);font-size:14.5px;line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.row .r3{margin-top:6px;display:flex;gap:4px;flex-wrap:wrap}
+.row .tg{font-size:10.5px;background:var(--chip);border-radius:999px;padding:2px 7px;color:var(--muted)}
+.groupbar{position:sticky;top:0;background:#f4efe7;border-bottom:1px solid var(--line);padding:6px 13px;font-size:11.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);z-index:2}
+
+/* ---------- detail / editor ---------- */
+.detail{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0}
+.metabar{flex:0 0 auto;background:var(--panel);border-bottom:1px solid var(--line)}
+.metasum{display:flex;align-items:flex-start;gap:10px;padding:10px 14px;cursor:pointer}
+.metasum .cite{flex:1;font-family:var(--serif);font-size:14.5px;line-height:1.4;min-width:0}
+.metasum .cite i{font-style:italic}
+.metasum .facts{display:flex;gap:5px;flex-wrap:wrap;margin-top:5px}
+.fact{font-size:11px;background:var(--chip);border-radius:999px;padding:2px 8px;color:var(--muted);white-space:nowrap}
+.fact.acc{background:#efe4d6;color:var(--accent)}
+.twist{background:none;border:1px solid var(--line);border-radius:7px;padding:5px 9px;font-size:12px;white-space:nowrap;flex:0 0 auto}
+.metafull{display:none;padding:0 14px 12px;border-top:1px dashed var(--line)}
+.metafull.open{display:block}
+.fgrid{display:flex;flex-wrap:wrap;gap:10px 14px;margin-top:10px}
+.f{display:flex;flex-direction:column;gap:3px;min-width:0}
+.f label{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700}
+.sect{margin-top:12px;border-top:1px solid var(--line);padding-top:9px}
+.sect>summary{cursor:pointer;font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);list-style:none;display:flex;align-items:center;gap:7px;padding:3px 0}
+.sect>summary::-webkit-details-marker{display:none}
+.sect>summary::before{content:'▸';font-size:11px;transition:transform .15s}
+.sect[open]>summary::before{transform:rotate(90deg)}
+.sect .inner{padding:8px 0 2px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+
+.panes{flex:1;display:flex;gap:12px;padding:12px;min-height:0}
+.pane{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:12px;display:flex;flex-direction:column;min-width:0;min-height:0}
+.panehead{display:flex;align-items:center;gap:5px;padding:7px 10px;border-bottom:1px solid var(--line);flex:0 0 auto;flex-wrap:wrap}
+.panehead .ttl{font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);flex:1;min-width:60px}
+.tbtn{background:none;border:1px solid var(--line);border-radius:6px;padding:5px 8px;font-size:12.5px;min-width:32px}
+.rte{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:13px 15px;line-height:1.62}
+.rte.q{font-family:var(--serif);font-size:16.5px}
+.rte.n{font-size:14.5px}
+.rte mark{background:var(--hl)}
+.actions{flex:0 0 auto;display:flex;gap:7px;align-items:center;padding:9px 12px;background:var(--panel);border-top:1px solid var(--line);flex-wrap:wrap;
+  padding-bottom:calc(9px + env(safe-area-inset-bottom))}
+
+/* ---------- A: left filter rail ---------- */
+.rail{flex:0 0 var(--rail);background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0;transition:flex-basis .18s}
+.rail.mini{flex-basis:52px}
+.railhead{padding:9px 11px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px;flex:0 0 auto}
+.railscroll{overflow-y:auto;flex:1;padding:4px 0 16px}
+.rail.mini .railscroll,.rail.mini .railhead .lbl{display:none}
+.rail.mini .miniicons{display:flex}
+.miniicons{display:none;flex-direction:column;gap:4px;padding:8px 6px;align-items:center}
+.miniicons button{width:38px;height:38px;border-radius:9px;border:none;background:var(--chip);font-size:15px;position:relative}
+.miniicons button .dot{position:absolute;top:4px;right:4px;width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.grp{border-bottom:1px solid var(--line)}
+.grp>summary{cursor:pointer;list-style:none;padding:10px 12px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);display:flex;align-items:center;gap:7px}
+.grp>summary::-webkit-details-marker{display:none}
+.grp>summary::before{content:'▸';transition:transform .15s;font-size:11px}
+.grp[open]>summary::before{transform:rotate(90deg)}
+.grp .gi{padding:0 12px 12px;display:flex;flex-wrap:wrap;gap:5px}
+.grp .gi input,.grp .gi select{width:100%}
+
+/* ---------- B: filter popover ---------- */
+.cmdbar{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--panel);border-bottom:1px solid var(--line);flex:0 0 auto;flex-wrap:wrap}
+.pop{position:absolute;z-index:60;top:100%;left:12px;right:12px;max-width:720px;background:var(--panel);border:1px solid var(--line);
+  border-radius:13px;box-shadow:0 14px 40px rgba(60,48,32,.2);padding:14px;display:none;max-height:70vh;overflow-y:auto}
+.pop.open{display:block}
+.popwrap{position:relative}
+.tabs{display:flex;gap:3px;padding:0 12px;background:var(--panel);border-bottom:1px solid var(--line);flex:0 0 auto;overflow-x:auto}
+.tabs button{background:none;border:none;border-bottom:2px solid transparent;padding:9px 12px;font-size:13px;font-weight:600;color:var(--muted);white-space:nowrap}
+.tabs button.on{color:var(--ink);border-bottom-color:var(--accent)}
+.tabbody{flex:0 0 auto;background:var(--panel);border-bottom:1px solid var(--line);padding:11px 14px;display:none}
+.tabbody.on{display:block}
+
+/* ---------- C: right inspector ---------- */
+.insp{flex:0 0 var(--insp);background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.insphead{padding:9px 12px;border-bottom:1px solid var(--line);font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);display:flex;align-items:center;gap:8px}
+.inspscroll{overflow-y:auto;flex:1;padding-bottom:20px}
+.insp .grp .gi{flex-direction:column;align-items:stretch}
+.insp .grp .gi .chiprow{display:flex;flex-wrap:wrap;gap:5px}
+
+.hidden{display:none!important}
+.backbtn{display:none}
+
+/* ---------- D: hybrid, independently collapsible columns ---------- */
+.strip{flex:0 0 42px;background:var(--panel);display:flex;flex-direction:column;align-items:center;gap:10px;padding:10px 0;cursor:pointer}
+.strip.l{border-right:1px solid var(--line)}
+.strip.r{border-left:1px solid var(--line)}
+.strip:hover{background:#f7f3ed}
+.strip .ico{width:30px;height:30px;border-radius:8px;background:var(--chip);display:flex;align-items:center;justify-content:center;font-size:14px}
+.strip .vlabel{writing-mode:vertical-rl;font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+.strip .n{font-size:10px;font-weight:700;color:#fff;background:var(--accent);border-radius:999px;padding:1px 5px}
+
+/* details panel that SHOWS rather than hides */
+.dpanel{flex:0 0 var(--insp);background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.dpanel .hd{padding:8px 11px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:7px;flex:0 0 auto}
+.dpanel .hd .t{font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.dpanel .sc{overflow-y:auto;-webkit-overflow-scrolling:touch;flex:1}
+.blk{padding:10px 12px;border-bottom:1px solid var(--line)}
+.blk .bh{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+.blk .bh .lbl{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.blk .bh .add{margin-left:auto;background:none;border:1px solid var(--line);border-radius:6px;width:24px;height:24px;font-size:14px;line-height:1;color:var(--muted);padding:0}
+.blk .vals{display:flex;flex-wrap:wrap;gap:5px}
+.blk .cite{font-family:var(--serif);font-size:13.5px;line-height:1.45}
+.blk .kv{display:flex;justify-content:space-between;gap:8px;font-size:12.5px;padding:3px 0}
+.blk .kv span:first-child{color:var(--muted)}
+.blk.empty .vals{color:var(--muted);font-size:12.5px;font-style:italic}
+
+/* facts strip shown when the details panel is collapsed — never fully lose the metadata */
+.facts-strip{flex:0 0 auto;display:flex;align-items:center;gap:5px;flex-wrap:wrap;
+  padding:7px 12px;background:var(--panel);border-bottom:1px solid var(--line)}
+.facts-strip .cite{font-family:var(--serif);font-size:13px;margin-right:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:45%}
+
+@media(max-width:1000px){
+  .dpanel{position:absolute;z-index:70;top:0;bottom:0;right:0;width:290px;flex-basis:290px;box-shadow:0 0 40px rgba(60,48,32,.18)}
+}
+@media(max-width:760px){
+  .strip{display:none}
+  .dpanel{width:100%;flex-basis:100%}
+}
+
+/* ---------- responsive ---------- */
+@media(max-width:1180px){
+  :root{--rail:220px;--list:290px;--insp:260px}
+}
+@media(max-width:1000px){
+  /* iPad portrait: rail/inspector become overlays; list+detail stay side by side */
+  .rail{position:absolute;z-index:70;top:0;bottom:0;left:0;width:270px;flex-basis:270px;box-shadow:0 0 40px rgba(60,48,32,.18)}
+  .rail.hide{display:none}
+  .insp{position:absolute;z-index:70;top:0;bottom:0;right:0;width:280px;flex-basis:280px;box-shadow:0 0 40px rgba(60,48,32,.18)}
+  .insp.hide{display:none}
+  :root{--list:260px}
+  .panes{flex-direction:column}
+}
+@media(max-width:760px){
+  /* iPhone: one column, list <-> detail */
+  .body{position:relative}
+  .listcol{flex:1 1 auto;border-right:none}
+  .detail{position:absolute;inset:0;background:var(--bg);z-index:40}
+  .stack-list .detail{display:none}
+  .stack-detail .listcol{display:none}
+  .backbtn{display:inline-flex}
+  .panes{flex-direction:column;padding:9px;gap:9px}
+  .rte{padding:11px 12px}
+  .metasum{padding:9px 11px}
+}
+</style>
+</head>
+<body>
+
+<div id="mockbar">
+  <b>Notes on Books — UI mockups</b>
+  <div class="seg">
+    <button data-l="A" class="on" onclick="setL('A')">A · Left rail</button>
+    <button data-l="B" onclick="setL('B')">B · Top bar</button>
+    <button data-l="C" onclick="setL('C')">C · Inspector</button>
+    <button data-l="D" onclick="setL('D')">D · Hybrid ★</button>
+  </div>
+  <span class="note" id="hint"></span>
+</div>
+
+<div id="stage"></div>
+
+<script>
+/* ============ sample data (from Shane's real notes) ============ */
+const NOTES=[
+ {id:1,author:'Burroughs, Jeremiah',short:'Burroughs',work:'The Rare Jewel of Christian Contentment',
+  cite:'Jeremiah Burroughs, <i>The Rare Jewel of Christian Contentment</i> (Olive Tree Software edition… Printed by W. Bentley for L. Sadler and R. Beaumont, 1651), Chapter 1.',
+  page:'ch. 1',purpose:['Devotional'],refs:['Joshua 4'],tags:['Comfort','Contentment'],
+  quote:'Though your position is low, yet you are not in the same danger as those who are in a higher position. God calls those in public positions to stand longer in the gap and place of danger than other people, but we must be content to stay even in Jordan till the Lord shall be pleased to call us out.',
+  note:'Burroughs cites the crossing of the Jordan in Joshua 4, pointing out that the priests had to stand in the river for the duration of the crossing with greater exposure to danger than did the rank and file Israelite. Thus, leaders are more exposed to affliction and danger than those whom they lead.\n\nMe: We could take this as an encouragement, that current affliction is a way of both helping other believers now, and of preparing us to help them in the future.'},
+ {id:2,author:'Burroughs, Jeremiah',short:'Burroughs',work:'The Rare Jewel of Christian Contentment',
+  cite:'Jeremiah Burroughs, <i>The Rare Jewel of Christian Contentment</i> (Olive Tree Software edition… Printed by W. Bentley for L. Sadler and R. Beaumont, 1651), Chapter 1.',
+  page:'ch. 1',purpose:['Devotional'],refs:[],tags:['Contentment','Faith'],
+  quote:"So though we be shut up in great afflictions, and we may think of this and that and the other means to come out of that affliction, yet till God opens the door, we should be willing to stay; God has put us in, and God will bring us out. So we read in the Acts of Paul, when they had shut him in prison and would have sent for him out; 'No', says Paul, 'they shut us in, let them come and fetch us out.'",
+  note:'The willingness to remain is itself the substance of contentment — not passivity but a refusal to force the door God has shut.'},
+ {id:3,author:'Rutherford, Samuel',short:'Rutherford',work:'Eighteen Quaint Sermons',
+  cite:'Samuel Rutherford, "The Worth and Excellence of the Gospel," in <i>Eighteen Quaint Sermons (Sermons eBook)</i>, 260.',
+  page:'p. 260',purpose:[],refs:[],tags:['Gospel','Foolishness','Sun','Blow','Hill'],
+  quote:"Be no party in the world. Make the gospel and Christ your party, and take not the gospel for your enemy; for resist the gospel who will, and, whoever they be that stand out against it, it shall aye at last overmaster them, and ding them down, and tread them under foot, whether they will or no. How many have there been who have been setting their shoulders and their wits together to thrust this gospel out of the world. They thought it to be a cumbersome guest, and would fain [have] been quit of it, and so pressed to blow out Christ's candle. <mark>But they have been like drunken men, who in their drunken humour would run up to the top of a hill to blow out the light of the sun;</mark> but instead of blowing out the light thereof, they have only kythed their own foolishness.",
+  note:'I love the idea of men trying to blow out the sun as an illustration of human vanity and foolishness.'},
+ {id:4,author:'Hildersam, Arthur',short:'Hildersam',work:'CLII lectures vpon Psalme LI',
+  cite:'Arthur Hildersam, <i>CLII lectures vpon Psalme LI preached at Ashby-Delazouch in Leicester-shire</i> (London, 1635), 16.',
+  page:'p. 16',purpose:['PhD'],refs:['Job 41:24','Proverbs 1:27','Luke 7:38, 47'],
+  tags:['Emotion-theology linkage','Repentance','Comfort','Happiness','Hardness','Tenderness','Meditation'],
+  quote:'There be many men that have hearts like to Leviathan as the Lord speaketh, Iob. 41.24 <i>His heart is as firme as a stone, yea as hard as a piece of the neither mil stone</i>. <mark>That can commit grosse sins, and live daily in them, without all trouble of conscience, feele no burden in them, but esteeme them as light as a feather, and can go away merrily with them. And this they count their great happinesse, that they are not like your professours, alwaies troubled in their minds, they thanke God they have quiet consciences</mark>, Zach. 11.5.',
+  note:'In the context of repentance, or precisely speaking, of the emotional state of a person in the lead up to repentance, Hildersham is describing false emotional responses by unbelievers vs. true responses by believers.\n\nNote that the unbelieving/false responses are positive emotions — happiness, a free conscience, no burden, and merriment. The unbelievers problem is a hard heart that doesn\'t feel the anguish of sin. This hard heartedness, however, eventually results in horror, desperation, and fear.'}
+];
+const TAGS=['Comfort','Sin','Repentance','Faith','Fear','Contentment','Emotion-theology linkage','Temptation','Trojan horse','Inner-outer aspect of sin','Assurance','Question','Happiness','Conscience','Joy','Love','Grace','Confession'];
+const PURPOSES=['PhD','Devotional','Owen-Mortification Class'];
+
+let L='D', cur=4, stack='list';
+const esc=s=>(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const N=()=>NOTES.find(n=>n.id===cur);
+const nl2p=t=>t.split('\n\n').map(p=>'<p style="margin:0 0 .8em">'+p+'</p>').join('');
+
+/* ---------- shared pieces ---------- */
+function listRows(){
+  let out='',lastWork='';
+  NOTES.forEach(n=>{
+    if(n.work!==lastWork){out+=`<div class="groupbar">${esc(n.short)} · ${esc(n.work)}</div>`;lastWork=n.work}
+    out+=`<button class="row ${n.id===cur?'on':''}" onclick="pick(${n.id})">
+      <div class="r1"><b>${esc(n.page)}</b>${n.purpose.map(p=>`<span>· ${esc(p)}</span>`).join('')}</div>
+      <div class="r2">${n.quote.replace(/<[^>]+>/g,'')}</div>
+      <div class="r3">${n.refs.map(r=>`<span class="tg">📖 ${esc(r)}</span>`).join('')}${n.tags.slice(0,2).map(t=>`<span class="tg">${esc(t)}</span>`).join('')}${n.tags.length>2?`<span class="tg">+${n.tags.length-2}</span>`:''}</div>
+    </button>`;
+  });
+  return out;
+}
+function listCol(){
+  return `<div class="listcol">
+    <div class="listhead">
+      <input placeholder="Search…" style="flex:1;min-width:0">
+      <select style="width:auto"><option>page ↑</option><option>newest</option><option>author</option></select>
+    </div>
+    <div class="listhead" style="border-top:none;padding-top:0">
+      <span class="small muted">276 notes · <b>4 shown</b></span>
+      <span class="spacer"></span>
+      <button class="btn sm gho" onclick="alert('Clears every active filter — always in reach, never buried.')">Clear filters</button>
+    </div>
+    <div class="listscroll">${listRows()}</div>
+  </div>`;
+}
+function toolbar(){
+  return `<button class="tbtn"><b>B</b></button><button class="tbtn"><i>I</i></button><button class="tbtn"><u>U</u></button>
+    <button class="tbtn" style="background:var(--hl)">✺</button><button class="tbtn">Tx</button>
+    <button class="tbtn">🧹</button><button class="tbtn">📖+</button>`;
+}
+function panes(){
+  const n=N();
+  return `<div class="panes">
+    <div class="pane"><div class="panehead"><span class="ttl">Quote</span>${toolbar()}</div>
+      <div class="rte q">${nl2p(n.quote)}</div></div>
+    <div class="pane"><div class="panehead"><span class="ttl">My notes</span>${toolbar()}</div>
+      <div class="rte n">${nl2p(esc(n.note))}</div></div>
+  </div>`;
+}
+function actions(){
+  return `<div class="actions">
+    <button class="btn">💾 Save</button>
+    <button class="btn sec">New (same author)</button>
+    <button class="btn sec">New</button>
+    <span class="spacer"></span>
+    <span class="small muted">saved ✓</span>
+  </div>`;
+}
+/* collapsed metadata summary — the heart of the redesign */
+function metaBar(withTwist){
+  const n=N();
+  return `<div class="metabar">
+    <div class="metasum" onclick="tog('metafull')">
+      <div class="cite">${n.cite}
+        <div class="facts">
+          <span class="fact acc">${esc(n.page)}</span>
+          ${n.purpose.map(p=>`<span class="fact acc">${esc(p)}</span>`).join('')}
+          ${n.refs.map(r=>`<span class="fact">📖 ${esc(r)}</span>`).join('')}
+          <span class="fact">${n.tags.length} tags</span>
+        </div>
+      </div>
+      ${withTwist?`<button class="twist" id="twistlbl">Details ▾</button>`:''}
+      <button class="twist" onclick="event.stopPropagation();alert('Copy menu: Quote · Quote+cite · Citation · Bibliography')">Copy ▾</button>
+    </div>
+    <div class="metafull" id="metafull">
+      ${metaFields()}
+    </div>
+  </div>`;
+}
+function metaFields(){
+  const n=N();
+  return `<div class="fgrid">
+      <div class="f" style="flex:1;min-width:200px"><label>Author</label><select><option>${esc(n.author)}</option></select></div>
+      <div class="f" style="flex:2;min-width:240px"><label>Work</label><select><option>${esc(n.work)}</option></select></div>
+      <div class="f"><label>&nbsp;</label><div style="display:flex;gap:6px"><button class="btn sm sec">+ New work</button><button class="btn sm sec">Edit work</button></div></div>
+    </div>
+    <details class="sect" open><summary>Locators &amp; chapter</summary><div class="inner">
+      <span class="chip on">${esc(n.page)} ✕</span>
+      <select style="width:auto"><option>Page</option><option>Kindle loc.</option><option>EEBO image</option></select>
+      <input placeholder="value" style="width:110px"><button class="btn sm sec">Add</button>
+      <input placeholder="Chapter title" style="width:150px"><input placeholder="Chapter author" style="width:140px">
+    </div></details>
+    <details class="sect"><summary>Purpose ${n.purpose.length?`<span class="count">${n.purpose.length}</span>`:''}</summary><div class="inner">
+      ${PURPOSES.map(p=>`<span class="chip ${n.purpose.includes(p)?'on':''}">${esc(p)}</span>`).join('')}
+      ${n.purpose.includes('PhD')?`<div style="width:100%;margin-top:8px;display:flex;gap:10px;flex-wrap:wrap">
+        <div class="f"><label>Theological loci</label><input style="width:140px" value="Repentance"></div>
+        <div class="f"><label>Praxis category</label><input style="width:140px"></div>
+        <div class="f"><label>OCR PDF page #</label><input style="width:110px" value="164"></div>
+        <div class="f"><label>Treatise #</label><input style="width:90px"></div></div>`:''}
+    </div></details>
+    <details class="sect"><summary>Scripture ${n.refs.length?`<span class="count">${n.refs.length}</span>`:''}</summary><div class="inner">
+      ${n.refs.map(r=>`<span class="chip on">📖 ${esc(r)} ✕</span>`).join('')}
+      <input placeholder="type e.g. John 3:16-21" style="width:190px"><button class="btn sm sec">Add</button>
+      <button class="btn sm sec">Testament ▾</button>
+    </div></details>
+    <details class="sect"><summary>Tags <span class="count">${n.tags.length}</span></summary><div class="inner">
+      ${n.tags.map(t=>`<span class="chip on">${esc(t)} ✕</span>`).join('')}
+      <input placeholder="add tag…" style="width:130px">
+    </div></details>`;
+}
+function filterGroups(inspector){
+  return `
+    <details class="grp" open><summary>Search</summary><div class="gi">
+      <input placeholder="Search all notes…">
+      <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px">
+        <span class="chip on">quotes</span><span class="chip on">notes</span><span class="chip">tags</span></div>
+    </div></details>
+    <details class="grp" open><summary>Tags <span class="count">2</span></summary><div class="gi">
+      <div class="${inspector?'chiprow':''}" style="display:flex;flex-wrap:wrap;gap:5px">
+        ${TAGS.slice(0,8).map((t,i)=>`<span class="chip ${i<2?'on':''}">${esc(t)}</span>`).join('')}
+      </div>
+      <button class="btn sm gho" style="margin-top:7px">Show all 18 tags…</button>
+    </div></details>
+    <details class="grp"><summary>Purpose &amp; fields</summary><div class="gi">
+      ${PURPOSES.map(p=>`<span class="chip">${esc(p)}</span>`).join('')}
+      <div class="small muted" style="width:100%;margin-top:7px">Purpose-specific filters (Theological Loci, Praxis Category, Lundgaard part) appear here <b>only when that purpose is selected</b> — instead of always.</div>
+    </div></details>
+    <details class="grp"><summary>Scripture</summary><div class="gi">
+      <input placeholder="e.g. Romans 8 or John 3:16">
+    </div></details>
+    <details class="grp"><summary>Author &amp; work</summary><div class="gi">
+      <select><option>any author</option></select><select style="margin-top:6px"><option>any work</option></select>
+    </div></details>
+    <details class="grp"><summary>Saved views</summary><div class="gi">
+      <select><option>saved views…</option></select>
+      <div style="display:flex;gap:6px;margin-top:7px"><button class="btn sm sec">💾 Save</button><button class="btn sm gho">Delete</button></div>
+    </div></details>`;
+}
+function appbar(extra){
+  return `<div class="appbar">
+    <span class="brand">✒ Notes on Books</span>
+    ${extra||''}
+    <nav><button class="on">Notes</button><button>Works</button><button>Authors</button><button>Settings</button></nav>
+    <span class="spacer"></span>
+    <button class="btn sm">+ New note</button>
+  </div>`;
+}
+
+/* ---------- layout A: collapsible left filter rail ---------- */
+function A(){
+  return appbar()+`<div class="body stack-${stack}">
+    <div class="rail ${railHidden?'hide':''}" id="rail">
+      <div class="railhead">
+        <button class="twist" onclick="toggleRail()">☰</button>
+        <span class="lbl small" style="font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">Filters</span>
+        <span class="spacer lbl"></span>
+        <button class="btn sm gho lbl" onclick="alert('Clear all filters')">Clear</button>
+      </div>
+      <div class="miniicons">
+        <button onclick="toggleRail()" title="Search">🔍<span class="dot"></span></button>
+        <button onclick="toggleRail()" title="Tags">🏷</button>
+        <button onclick="toggleRail()" title="Purpose">◎</button>
+        <button onclick="toggleRail()" title="Scripture">📖</button>
+      </div>
+      <div class="railscroll">${filterGroups(false)}</div>
+    </div>
+    ${listCol()}
+    <div class="detail">
+      <div style="display:flex;align-items:center;gap:8px;padding:7px 11px;background:var(--panel);border-bottom:1px solid var(--line)">
+        <button class="btn sm gho backbtn" onclick="back()">‹ List</button>
+        <button class="btn sm gho" onclick="toggleRail()" id="railtog">☰ Filters</button>
+        <span class="spacer"></span><span class="small muted">Note 4 of 276</span>
+      </div>
+      ${metaBar(true)}${panes()}${actions()}
+    </div>
+  </div>`;
+}
+
+/* ---------- layout B: top command bar + filter popover ---------- */
+function B(){
+  return appbar()+`<div class="popwrap"><div class="cmdbar">
+      <input placeholder="Search…" style="flex:1;min-width:120px">
+      <button class="btn sm sec" onclick="tog('pop')">Filters <span class="count">3</span></button>
+      <button class="btn sm gho" onclick="alert('Clear all filters')">Clear</button>
+      <select style="width:auto"><option>sort: page ↑</option><option>newest</option></select>
+      <button class="btn sm gho">💾 Views</button>
+    </div>
+    <div class="pop" id="pop">
+      <div style="display:flex;align-items:center;margin-bottom:6px">
+        <b style="font-size:13px">Filters</b><span class="spacer"></span>
+        <button class="btn sm gho" onclick="tog('pop')">Done</button></div>
+      ${filterGroups(false)}
+    </div></div>
+    <div class="body stack-${stack}">
+      ${listCol()}
+      <div class="detail">
+        <div style="display:flex;align-items:center;gap:8px;padding:7px 11px;background:var(--panel);border-bottom:1px solid var(--line)">
+          <button class="btn sm gho backbtn" onclick="back()">‹ List</button>
+          <span class="small muted">Note 4 of 276</span><span class="spacer"></span>
+        </div>
+        ${metaBar(false)}
+        <div class="tabs">
+          <button class="on" onclick="tab(0,this)">Citation</button>
+          <button onclick="tab(1,this)">Locators</button>
+          <button onclick="tab(2,this)">Purpose</button>
+          <button onclick="tab(3,this)">Scripture</button>
+          <button onclick="tab(4,this)">Tags</button>
+          <button onclick="tab(-1,this)">Hide ▴</button>
+        </div>
+        <div class="tabbody on" id="tb">${tabContent(0)}</div>
+        ${panes()}${actions()}
+      </div>
+    </div>`;
+}
+function tabContent(i){
+  const n=N();
+  if(i===0)return `<div class="fgrid">
+      <div class="f" style="flex:1;min-width:200px"><label>Author</label><select><option>${esc(n.author)}</option></select></div>
+      <div class="f" style="flex:2;min-width:220px"><label>Work</label><select><option>${esc(n.work)}</option></select></div>
+      <div class="f"><label>&nbsp;</label><div style="display:flex;gap:6px"><button class="btn sm sec">+ New</button><button class="btn sm sec">Edit</button></div></div></div>`;
+  if(i===1)return `<div class="inner" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+      <span class="chip on">${esc(n.page)} ✕</span><select style="width:auto"><option>Page</option></select>
+      <input placeholder="value" style="width:110px"><button class="btn sm sec">Add</button>
+      <input placeholder="Chapter title" style="width:160px"></div>`;
+  if(i===2)return `<div style="display:flex;gap:6px;flex-wrap:wrap">${PURPOSES.map(p=>`<span class="chip ${n.purpose.includes(p)?'on':''}">${esc(p)}</span>`).join('')}</div>
+      ${n.purpose.includes('PhD')?`<div style="margin-top:9px;display:flex;gap:10px;flex-wrap:wrap">
+      <div class="f"><label>Theological loci</label><input style="width:140px" value="Repentance"></div>
+      <div class="f"><label>Praxis category</label><input style="width:140px"></div>
+      <div class="f"><label>OCR PDF page #</label><input style="width:110px" value="164"></div></div>`:''}`;
+  if(i===3)return `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">${n.refs.map(r=>`<span class="chip on">📖 ${esc(r)} ✕</span>`).join('')}
+      <input placeholder="e.g. John 3:16-21" style="width:180px"><button class="btn sm sec">Add</button></div>`;
+  return `<div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center">${n.tags.map(t=>`<span class="chip on">${esc(t)} ✕</span>`).join('')}
+      <input placeholder="add tag…" style="width:130px"></div>`;
+}
+
+/* ---------- layout C: right inspector ---------- */
+function C(){
+  return appbar(`<div style="display:flex;gap:6px;align-items:center;margin-left:8px">
+      <input placeholder="Search…" style="width:180px">
+      <button class="btn sm sec" onclick="tog('pop')">Filters <span class="count">3</span></button>
+      <button class="btn sm gho" onclick="alert('Clear all filters')">Clear</button></div>`)+
+    `<div class="popwrap"><div class="pop" id="pop">
+      <div style="display:flex;align-items:center;margin-bottom:6px"><b style="font-size:13px">Filters</b><span class="spacer"></span>
+      <button class="btn sm gho" onclick="tog('pop')">Done</button></div>${filterGroups(false)}</div></div>
+    <div class="body stack-${stack}">
+      ${listCol()}
+      <div class="detail">
+        <div style="display:flex;align-items:center;gap:8px;padding:7px 11px;background:var(--panel);border-bottom:1px solid var(--line)">
+          <button class="btn sm gho backbtn" onclick="back()">‹ List</button>
+          <div class="cite" style="flex:1;font-family:var(--serif);font-size:13.5px;line-height:1.35;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${N().cite}</div>
+          <button class="btn sm gho" onclick="toggleInsp()">Details ☰</button>
+        </div>
+        ${panes()}${actions()}
+      </div>
+      <div class="insp ${inspHidden?'hide':''}" id="insp">
+        <div class="insphead">Note details<span class="spacer"></span>
+          <button class="twist" onclick="toggleInsp()">✕</button></div>
+        <div class="inspscroll">
+          <details class="grp" open><summary>Citation</summary><div class="gi">
+            <select><option>${esc(N().author)}</option></select>
+            <select style="margin-top:6px"><option>${esc(N().work)}</option></select>
+            <div style="display:flex;gap:6px;margin-top:7px"><button class="btn sm sec">+ New work</button><button class="btn sm sec">Edit</button></div>
+            <div style="display:flex;gap:5px;margin-top:9px;flex-wrap:wrap">
+              <button class="btn sm gho">Quote</button><button class="btn sm gho">Q+cite</button>
+              <button class="btn sm gho">Cite</button><button class="btn sm gho">Biblio</button></div>
+          </div></details>
+          <details class="grp" open><summary>Locators</summary><div class="gi">
+            <div class="chiprow"><span class="chip on">${esc(N().page)} ✕</span></div>
+            <div style="display:flex;gap:5px;margin-top:7px"><select style="flex:1"><option>Page</option></select><input placeholder="value" style="width:74px"></div>
+          </div></details>
+          <details class="grp" ${N().purpose.length?'open':''}><summary>Purpose ${N().purpose.length?`<span class="count">${N().purpose.length}</span>`:''}</summary><div class="gi">
+            <div class="chiprow">${PURPOSES.map(p=>`<span class="chip ${N().purpose.includes(p)?'on':''}">${esc(p)}</span>`).join('')}</div>
+            ${N().purpose.includes('PhD')?`<div style="margin-top:9px"><div class="f"><label>Theological loci</label><input value="Repentance"></div>
+            <div class="f" style="margin-top:6px"><label>Praxis category</label><input></div>
+            <div class="f" style="margin-top:6px"><label>OCR PDF page #</label><input value="164"></div></div>`:''}
+          </div></details>
+          <details class="grp" ${N().refs.length?'open':''}><summary>Scripture ${N().refs.length?`<span class="count">${N().refs.length}</span>`:''}</summary><div class="gi">
+            <div class="chiprow">${N().refs.map(r=>`<span class="chip on">📖 ${esc(r)} ✕</span>`).join('')}</div>
+            <input placeholder="e.g. John 3:16-21" style="margin-top:7px">
+          </div></details>
+          <details class="grp"><summary>Tags <span class="count">${N().tags.length}</span></summary><div class="gi">
+            <div class="chiprow">${N().tags.map(t=>`<span class="chip on">${esc(t)} ✕</span>`).join('')}</div>
+            <input placeholder="add tag…" style="margin-top:7px">
+          </div></details>
+        </div>
+      </div>
+    </div>`;
+}
+
+/* ---------- layout D: hybrid — top filter bar, scannable side panel, both collapsible ---------- */
+function factsStrip(){
+  const n=N();
+  return `<div class="facts-strip">
+    <span class="cite">${n.cite.replace(/<[^>]+>/g,'')}</span>
+    <span class="fact acc">${esc(n.page)}</span>
+    ${n.purpose.map(p=>`<span class="fact acc">${esc(p)}</span>`).join('')}
+    ${n.refs.map(r=>`<span class="fact">📖 ${esc(r)}</span>`).join('')}
+    ${n.tags.slice(0,3).map(t=>`<span class="fact">${esc(t)}</span>`).join('')}
+    ${n.tags.length>3?`<span class="fact">+${n.tags.length-3}</span>`:''}
+    <span class="spacer"></span>
+    <button class="btn sm gho" onclick="toggleDet()">Details ‹</button>
+  </div>`;
+}
+function detailsPanel(){
+  const n=N();
+  return `<div class="dpanel" id="dpanel">
+    <div class="hd">
+      <span class="t">Note details</span><span class="spacer"></span>
+      <button class="twist" onclick="toggleDet()" title="Collapse">›</button>
+    </div>
+    <div class="sc">
+      <div class="blk">
+        <div class="bh"><span class="lbl">Citation</span><button class="add" title="Edit work">✎</button></div>
+        <div class="cite">${n.cite}</div>
+        <div class="vals" style="margin-top:8px">
+          <button class="btn sm gho">Quote</button><button class="btn sm gho">Q+cite</button>
+          <button class="btn sm gho">Cite</button><button class="btn sm gho">Biblio</button>
+        </div>
+      </div>
+      <div class="blk">
+        <div class="bh"><span class="lbl">Locators</span><button class="add" title="Add locator">+</button></div>
+        <div class="vals"><span class="chip on">${esc(n.page)} ✕</span></div>
+      </div>
+      <div class="blk ${n.purpose.length?'':'empty'}">
+        <div class="bh"><span class="lbl">Purpose</span><button class="add" title="Change">✎</button></div>
+        <div class="vals">${n.purpose.length?n.purpose.map(p=>`<span class="chip on">${esc(p)}</span>`).join(''):'none'}</div>
+        ${n.purpose.includes('PhD')?`<div style="margin-top:8px">
+          <div class="kv"><span>Theological loci</span><b>Repentance</b></div>
+          <div class="kv"><span>Praxis category</span><b class="muted">—</b></div>
+          <div class="kv"><span>OCR PDF page #</span><b>164</b></div>
+          <div class="kv"><span>Treatise #</span><b class="muted">—</b></div>
+        </div>`:''}
+      </div>
+      <div class="blk ${n.refs.length?'':'empty'}">
+        <div class="bh"><span class="lbl">Scripture</span><button class="add" title="Add reference">+</button></div>
+        <div class="vals">${n.refs.length?n.refs.map(r=>`<span class="chip on">📖 ${esc(r)} ✕</span>`).join(''):'none yet'}</div>
+      </div>
+      <div class="blk">
+        <div class="bh"><span class="lbl">Tags</span><span class="count">${n.tags.length}</span><button class="add" title="Add tag">+</button></div>
+        <div class="vals">${n.tags.map(t=>`<span class="chip on">${esc(t)} ✕</span>`).join('')}</div>
+      </div>
+    </div>
+  </div>`;
+}
+function D(){
+  const n=N();
+  const focus=listHidden&&detHidden;
+  return appbar(`<div style="display:flex;gap:6px;align-items:center;margin-left:8px;flex:1;min-width:0">
+      <input placeholder="Search…" style="flex:1;min-width:90px;max-width:260px">
+      <button class="btn sm sec" onclick="tog('pop')">Filters <span class="count">3</span></button>
+      <button class="btn sm gho" onclick="alert('Clears every active filter.')">Clear</button>
+      <select style="width:auto"><option>page ↑</option><option>newest</option><option>author</option></select>
+    </div>`)+
+  `<div class="popwrap"><div class="pop" id="pop">
+    <div style="display:flex;align-items:center;margin-bottom:6px"><b style="font-size:13px">Filters</b>
+    <span class="spacer"></span><button class="btn sm gho" onclick="tog('pop')">Done</button></div>
+    ${filterGroups(false)}</div></div>
+  <div class="body stack-${stack}">
+    ${listHidden?`<div class="strip l" onclick="toggleList()" title="Show list">
+        <div class="ico">☰</div><span class="n">4</span><span class="vlabel">Results</span></div>`
+      :listCol()}
+    <div class="detail">
+      <div style="display:flex;align-items:center;gap:7px;padding:6px 11px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap">
+        <button class="btn sm gho backbtn" onclick="back()">‹ List</button>
+        <button class="btn sm ${focus?'':'gho'}" onclick="toggleFocus()" title="Collapse both side panels">
+          ${focus?'◱ Exit focus':'◱ Focus'}</button>
+        <span class="spacer"></span>
+        <button class="btn sm gho" onclick="prevNote()">‹</button>
+        <span class="small muted">4 of 276</span>
+        <button class="btn sm gho" onclick="nextNote()">›</button>
+      </div>
+      ${detHidden?factsStrip():''}
+      ${panes()}${actions()}
+    </div>
+    ${detHidden?`<div class="strip r" onclick="toggleDet()" title="Show details">
+        <div class="ico">◧</div><span class="vlabel">Details</span></div>`
+      :detailsPanel()}
+  </div>`;
+}
+
+/* ---------- plumbing ---------- */
+let railHidden=false, inspHidden=false, listHidden=false, detHidden=false;
+function toggleList(){listHidden=!listHidden;render()}
+function toggleDet(){detHidden=!detHidden;render()}
+function toggleFocus(){const f=listHidden&&detHidden;listHidden=!f;detHidden=!f;render()}
+function prevNote(){const i=NOTES.findIndex(x=>x.id===cur);cur=NOTES[(i-1+NOTES.length)%NOTES.length].id;render()}
+function nextNote(){const i=NOTES.findIndex(x=>x.id===cur);cur=NOTES[(i+1)%NOTES.length].id;render()}
+function render(){
+  document.getElementById('stage').innerHTML = L==='A'?A():L==='B'?B():L==='C'?C():D();
+  document.querySelectorAll('#mockbar .seg button').forEach(b=>b.classList.toggle('on',b.dataset.l===L));
+  const w=innerWidth;
+  const dev = w<760?'phone width: list and note swap, one at a time':
+              w<=1000?'narrow: filters/inspector slide over':
+              'wide: all columns side by side';
+  const desc={A:'Filters in a collapsible left rail',
+              B:'Filters in a top bar popover, details in tabs',
+              C:'Filters up top, details in a right inspector',
+              D:'Top filter bar + always-visible details — collapse either side for focus'}[L];
+  document.getElementById('hint').textContent = desc+' — '+dev+' ('+w+'px)';
+}
+function setL(x){L=x;railHidden=false;inspHidden=false;listHidden=false;detHidden=false;render()}
+function pick(id){cur=id;if(innerWidth<760)stack='detail';render()}
+function back(){stack='list';render()}
+function tog(id){const e=document.getElementById(id);if(!e)return;e.classList.toggle('open');
+  if(id==='metafull'){const t=document.getElementById('twistlbl');if(t)t.textContent=e.classList.contains('open')?'Details ▴':'Details ▾'}}
+function toggleRail(){railHidden=!railHidden;render()}
+function toggleInsp(){inspHidden=!inspHidden;render()}
+function tab(i,btn){
+  const tb=document.getElementById('tb');
+  document.querySelectorAll('.tabs button').forEach(b=>b.classList.remove('on'));
+  if(i<0){tb.classList.remove('on');return}
+  btn.classList.add('on');tb.classList.add('on');tb.innerHTML=tabContent(i);
+}
+addEventListener('resize',render);
+addEventListener('orientationchange',()=>setTimeout(render,150));
+render();
+</script>
+</body>
+</html>
