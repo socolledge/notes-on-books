@@ -930,7 +930,7 @@ function clearFormatting(k){
   }
   dirty=true;scheduleSave();
 }
-function syncPanes(){CUR.quote_html=$('rte-q').innerHTML;CUR.note_html=$('rte-n').innerHTML}
+function syncPanes(){const q=$('rte-q'),n=$('rte-n');if(!q||!n||!CUR)return;CUR.quote_html=q.innerHTML;CUR.note_html=n.innerHTML}
 function refreshCite(){
   syncPanes();
   const w=W(CUR.work_id);
@@ -976,17 +976,19 @@ async function saveNote(auto){
   syncPanes();
   if(!stripHtml(CUR.quote_html).trim()&&!stripHtml(CUR.note_html).trim()){if(!auto)toast('Nothing to save');return}
   const rec={work_id:CUR.work_id,quote_html:CUR.quote_html,note_html:CUR.note_html,locators:CUR.locators,scripture_refs:CUR.scripture_refs||[],tags:CUR.tags,purposes:CUR.purposes,purpose_values:CUR.purpose_values,chapter_title:CUR.chapter_title,chapter_author:CUR.chapter_author,updated_at:new Date().toISOString()};
-  if(CUR.id){
-    const{error}=await sb.from('notes').update(rec).eq('id',CUR.id);
+  const target=CUR,tid=target.id;   // pin: CUR changes the moment another note is opened
+  if(tid){
+    const{error}=await sb.from('notes').update(rec).eq('id',tid);
     if(error){toast(error.message);return}
-    Object.assign(DB.notes.find(n=>n.id===CUR.id),rec);
+    const local=DB.notes.find(n=>n.id===tid);
+    if(local)Object.assign(local,rec);
   }else{
-    rec.date_added=CUR.date_added;
+    rec.date_added=target.date_added;
     const{data,error}=await sb.from('notes').insert(rec).select().single();
     if(error){toast(error.message);return}
-    DB.notes.unshift(data);CUR.id=data.id;
+    DB.notes.unshift(data);target.id=data.id;
   }
-  dirty=false;
+  if(CUR===target)dirty=false;
   const st=$('save-status');if(st)st.textContent='· saved ✓';
   if(!auto){toast('Saved');renderEditor()}
 }
@@ -1731,7 +1733,7 @@ function renderSettings(){
   </div>
   <div class="card set-section">
     <h3>Account</h3>
-    <p class="small muted">${esc((USER&&USER.email)||'')} · Notes on Books v1.11</p>
+    <p class="small muted">${esc((USER&&USER.email)||'')} · Notes on Books v1.12</p>
     <button class="btn sec" onclick="sb.auth.signOut().then(()=>location.reload())">Sign out</button>
   </div>`;
   const pinIn=$('pin-in');if(pinIn)makeAutocomplete(pinIn,allTags,{onEnter:v=>{pinIn.value=v;pin(v)}});

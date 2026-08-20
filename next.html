@@ -982,7 +982,7 @@ function clearFormatting(k){
   }
   dirty=true;scheduleSave();
 }
-function syncPanes(){CUR.quote_html=$('rte-q').innerHTML;CUR.note_html=$('rte-n').innerHTML}
+function syncPanes(){const q=$('rte-q'),n=$('rte-n');if(!q||!n||!CUR)return;CUR.quote_html=q.innerHTML;CUR.note_html=n.innerHTML}
 function refreshCite(){
   syncPanes();
   const w=W(CUR.work_id);
@@ -1022,28 +1022,47 @@ function setPV(pn,key,val){if(!CUR.purpose_values)CUR.purpose_values={};if(!CUR.
 function copyCur(mode){syncPanes();copyNote(CUR,mode)}
 let saveTimer=null;
 function scheduleSave(){if(!CUR)return;clearTimeout(saveTimer);setSaveState('dirty');saveTimer=setTimeout(()=>saveNote(true),1200)}
-async function flushSave(){if(saveTimer){clearTimeout(saveTimer);saveTimer=null;if(CUR)await saveNote(true)}}
+async function flushSave(){
+  if(saveTimer){clearTimeout(saveTimer);saveTimer=null;if(CUR)await saveNote(true)}
+  if(SAVE_INFLIGHT){try{await SAVE_INFLIGHT}catch(e){}}   // don't switch notes mid-write
+}
 /* Closing the tab, switching apps, or iOS suspending the page used to lose anything typed
    in the last ~1.2s. Flush on the way out. */
 addEventListener('pagehide',()=>{if(saveTimer)flushSave()});
 addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'&&saveTimer)flushSave()});
+let SAVE_INFLIGHT=null;
+/* CRITICAL: everything after an `await` must use `target`, never `CUR`.
+   CUR is reassigned the instant you click another result card, so any post-await
+   reference to it can write this note's content into whichever note you moved to.
+   That race silently replaced one record with a duplicate of another. */
 async function saveNote(auto){
   clearTimeout(saveTimer);saveTimer=null;
   syncPanes();
-  if(!stripHtml(CUR.quote_html).trim()&&!stripHtml(CUR.note_html).trim()){if(!auto)toast('Nothing to save');return}
-  const rec={work_id:CUR.work_id,quote_html:CUR.quote_html,note_html:CUR.note_html,locators:CUR.locators,scripture_refs:CUR.scripture_refs||[],tags:CUR.tags,purposes:CUR.purposes,purpose_values:CUR.purpose_values,chapter_title:CUR.chapter_title,chapter_author:CUR.chapter_author,updated_at:new Date().toISOString()};
-  setSaveState('saving');
-  if(CUR.id){
-    const{error}=await sb.from('notes').update(rec).eq('id',CUR.id);
-    if(error){setSaveState('error');toast('Not saved: '+error.message);return}
-    Object.assign(DB.notes.find(n=>n.id===CUR.id),rec);
-  }else{
-    rec.date_added=CUR.date_added;
-    const{data,error}=await sb.from('notes').insert(rec).select().single();
-    if(error){setSaveState('error');toast('Not saved: '+error.message);return}
-    DB.notes.unshift(data);CUR.id=data.id;
-  }
-  dirty=false;setSaveState('saved');
+  const target=CUR;                       // pin the note being saved
+  const id=target.id;
+  if(!stripHtml(target.quote_html).trim()&&!stripHtml(target.note_html).trim()){if(!auto)toast('Nothing to save');return}
+  const rec={work_id:target.work_id,quote_html:target.quote_html,note_html:target.note_html,locators:target.locators,scripture_refs:target.scripture_refs||[],tags:target.tags,purposes:target.purposes,purpose_values:target.purpose_values,chapter_title:target.chapter_title,chapter_author:target.chapter_author,updated_at:new Date().toISOString()};
+  if(SAVE_INFLIGHT){try{await SAVE_INFLIGHT}catch(e){}}   // never overlap two writes
+  if(CUR===target)setSaveState('saving');
+  const run=(async()=>{
+    if(id){
+      const{error}=await sb.from('notes').update(rec).eq('id',id);
+      if(error)return error;
+      const local=DB.notes.find(n=>n.id===id);   // by pinned id, not by live CUR
+      if(local)Object.assign(local,rec);
+    }else{
+      rec.date_added=target.date_added;
+      const{data,error}=await sb.from('notes').insert(rec).select().single();
+      if(error)return error;
+      DB.notes.unshift(data);target.id=data.id;  // stamp the note we saved, not whatever is open now
+    }
+    return null;
+  })();
+  SAVE_INFLIGHT=run;
+  const error=await run;
+  if(SAVE_INFLIGHT===run)SAVE_INFLIGHT=null;
+  if(error){setSaveState('error');toast('Not saved: '+error.message);return}
+  if(CUR===target){dirty=false;setSaveState('saved')}
   renderNotesList();refreshPager();
   if(!auto)toast('Saved');
 }
@@ -1420,9 +1439,15 @@ function activeFilterCount(){
 }
 function curIndex(rs){return rs.findIndex(n=>CUR&&n.id===CUR.id)}
 
+let PANE_OWNER=null;
 function renderNotes(){
   if(!CUR)CUR=blankNote();
   if(!CUR.scripture_refs)CUR.scripture_refs=[];
+  /* If the panes on screen were rendered from this same note object, capture whatever
+     was typed before we rebuild the DOM — otherwise clicking a filter chip or collapsing
+     a panel mid-sentence threw the text away. Identity check matters: after openNote()
+     CUR is a different object and the stale DOM must NOT be copied into it. */
+  if(PANE_OWNER===CUR)syncPanes();
   saveLibState();
   const host=$('view-notes');if(!host)return;
   host.innerHTML=
@@ -1439,6 +1464,7 @@ function renderNotes(){
     el.addEventListener('input',()=>{dirty=true;scheduleSave()});
     el.addEventListener('paste',sanitizePaste);
     el.addEventListener('keydown',rteShortcut)});
+  PANE_OWNER=CUR;
   renderNotesList();
   if(!UI.detHidden){renderPurposeFields();initScriptureSelects();
     const ti=$('tag-in');if(ti)makeAutocomplete(ti,allTags,{onEnter:v=>{ti.value=v;addTagFromInput()}})}
@@ -2023,7 +2049,7 @@ function renderSettings(){
   </div>
   <div class="card set-section">
     <h3>Account</h3>
-    <p class="small muted">${esc((USER&&USER.email)||'')} · Notes on Books v2.0-beta (next.html)</p>
+    <p class="small muted">${esc((USER&&USER.email)||'')} · Notes on Books v2.0-beta2 (next.html)</p>
     <button class="btn sec" onclick="sb.auth.signOut().then(()=>location.reload())">Sign out</button>
   </div>`;
   const pinIn=$('pin-in');if(pinIn)makeAutocomplete(pinIn,allTags,{onEnter:v=>{pinIn.value=v;pin(v)}});
