@@ -1356,7 +1356,12 @@ function deleteView(){const el=$('lib-views');if(!el||!el.value){toast('Choose a
 function gotoWorkNotes(wid){LIB.q='';LIB.tags=[];LIB.purpose='';LIB.person='';LIB.scripture='';LIB.work=wid;LIB.sort='page';LIB.selMode=false;LIB.sel=new Set();LIB.pf={};nav('library')}
 function sortNotes(arr){
   const st=LIB.sort||'new';
-  const firstPage=n=>{const l=(n.locators||[]).find(x=>x.type==='page');const v=l?parseFloat(String(l.value).replace(/[^\d.]/g,'')):NaN;return isNaN(v)?Infinity:v};
+  const firstPage=n=>{
+    const nums=(n.locators||[]).filter(x=>x.type==='page')
+      .flatMap(x=>String(x.value).match(/\d+(?:\.\d+)?/g)||[])
+      .map(Number).filter(v=>!isNaN(v));
+    return nums.length?Math.min(...nums):Infinity;
+  };
   const aw=n=>{const w=W(n.work_id);if(!w)return'zzzz';const p=contribs(w.id,'author')[0]||contribs(w.id,'editor')[0];return p?(p.sort_name||p.name):'zzzz'};
   const wt=n=>{const w=W(n.work_id);return w?w.title:'zzzz'};
   const yr=n=>{const w=W(n.work_id);const y=w&&w.pub?parseInt(w.pub.year):NaN;return isNaN(y)?Infinity:y};
@@ -1733,7 +1738,7 @@ function renderSettings(){
   </div>
   <div class="card set-section">
     <h3>Account</h3>
-    <p class="small muted">${esc((USER&&USER.email)||'')} · Notes on Books v1.12</p>
+    <p class="small muted">${esc((USER&&USER.email)||'')} · Notes on Books v1.13</p>
     <button class="btn sec" onclick="sb.auth.signOut().then(()=>location.reload())">Sign out</button>
   </div>`;
   const pinIn=$('pin-in');if(pinIn)makeAutocomplete(pinIn,allTags,{onEnter:v=>{pinIn.value=v;pin(v)}});

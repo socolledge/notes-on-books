@@ -197,6 +197,9 @@ body.v2 #view-works,body.v2 #view-people,body.v2 #view-settings{
 .rte{flex:1;padding:14px 16px;font-family:var(--serif);font-size:16.5px;line-height:1.65;overflow-y:auto;min-height:220px}
 .rte:empty:before{content:attr(data-ph);color:var(--muted);font-style:italic}
 .rte p{margin:0 0 .8em}
+.rte ul,.rte ol{margin:0 0 .8em;padding-left:1.5em}
+.rte li{margin:.15em 0}
+.note-card ul,.note-card ol{margin:0 0 .6em;padding-left:1.4em}
 /* ---------- library list ---------- */
 .note-card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:10px}
 .note-card .q{font-family:var(--serif);font-size:17px;line-height:1.6;border-left:3px solid var(--accent2);padding-left:12px;margin:8px 0}
@@ -939,7 +942,10 @@ function sanitizePaste(e){
           else if(tag==='I'||tag==='EM')r+='<i>'+inner+'</i>';
           else if(tag==='U')r+='<u>'+inner+'</u>';
           else if(tag==='MARK')r+='<mark>'+inner+'</mark>';
-          else if(tag==='P'||tag==='DIV'||tag==='LI'||tag==='TR'||/^H\d$/.test(tag))r+='<p>'+inner+'</p>';
+          else if(tag==='UL')r+='<ul>'+inner+'</ul>';
+          else if(tag==='OL')r+='<ol>'+inner+'</ol>';
+          else if(tag==='LI')r+='<li>'+inner+'</li>';
+          else if(tag==='P'||tag==='DIV'||tag==='TR'||/^H\d$/.test(tag))r+='<p>'+inner+'</p>';
           else if(tag!=='STYLE'&&tag!=='SCRIPT'&&tag!=='HEAD')r+=inner;
         }
       });
@@ -954,6 +960,8 @@ function sanitizePaste(e){
 function rteBar(k){
   const b=(cmd,lab,arg)=>`<button class="tbtn" onmousedown="event.preventDefault();fmt('${cmd}','${arg||''}')" title="${cmd}">${lab}</button>`;
   return b('bold','<b>B</b>')+b('italic','<i>I</i>')+b('underline','<u>U</u>')+
+    `<button class="tbtn" onmousedown="event.preventDefault();fmt('insertUnorderedList')" title="bulleted list">&bull;&nbsp;&#8801;</button>`+
+    `<button class="tbtn" onmousedown="event.preventDefault();fmt('insertOrderedList')" title="numbered list">1.&nbsp;&#8801;</button>`+
     `<button class="tbtn" style="background:var(--hl)" onmousedown="event.preventDefault();fmt('hiliteColor','','#fdf0a8')" title="highlight">✺</button>`+
     `<button class="tbtn" onmousedown="event.preventDefault();fmt('hiliteColor','','transparent')" title="remove highlight">⌫✺</button>`+
     `<button class="tbtn" onmousedown="event.preventDefault();clearFormatting('${k}')" title="clear formatting — clears the selection, or the whole box if nothing's selected">Tx</button>`+
@@ -1425,6 +1433,11 @@ async function finishKindleImport(wid,ki){
 const UI={listHidden:false,detHidden:false};
 try{Object.assign(UI,JSON.parse(localStorage.getItem('nob_ui')||'{}'))}catch(e){}
 function saveUI(){try{localStorage.setItem('nob_ui',JSON.stringify(UI))}catch(e){}}
+let FILTERS_OPEN=false;
+function toggleFilters(){FILTERS_OPEN=!FILTERS_OPEN;renderNotes()}
+function setLibPerson(v){LIB.person=v;
+  if(LIB.work&&v&&!DB.wc.some(c=>c.work_id===LIB.work&&c.person_id===v))LIB.work='';
+  renderNotes()}
 function togCls(id){const e=$(id);if(e)e.classList.toggle('open')}
 function closeMenus(){['note-menu','filters-pop'].forEach(id=>{const e=$(id);if(e)e.classList.remove('open')})}
 
@@ -1450,6 +1463,7 @@ function renderNotes(){
   if(PANE_OWNER===CUR)syncPanes();
   saveLibState();
   const host=$('view-notes');if(!host)return;
+  const _lr=$('lib-results');const _scroll=_lr?_lr.scrollTop:0;   // survive the rebuild
   host.innerHTML=
     toolRowHtml()+
     '<div class="notesbody">'+
@@ -1465,7 +1479,7 @@ function renderNotes(){
     el.addEventListener('paste',sanitizePaste);
     el.addEventListener('keydown',rteShortcut)});
   PANE_OWNER=CUR;
-  renderNotesList();
+  renderNotesList(_scroll);
   if(!UI.detHidden){renderPurposeFields();initScriptureSelects();
     const ti=$('tag-in');if(ti)makeAutocomplete(ti,allTags,{onEnter:v=>{ti.value=v;addTagFromInput()}})}
   const lt=$('lib-tag-in');if(lt)makeAutocomplete(lt,allTags,{onEnter:v=>{libTag(v);lt.value=''}});
@@ -1482,7 +1496,7 @@ function toolRowHtml(){
       <button onclick="stepNote(1)" title="Next result (→ or ⌥→)">›</button>
     </span>
     <input id="lib-q" placeholder="Search…" value="${esc(LIB.q)}" style="flex:1;min-width:90px;max-width:280px" oninput="LIB.q=this.value;renderNotesList();refreshPager()">
-    <button class="btn sm sec" onclick="togCls('filters-pop')">Filters${fc?' <span class="badge">'+fc+'</span>':''}</button>
+    <button class="btn sm sec" onclick="toggleFilters()">Filters${fc?' <span class="badge">'+fc+'</span>':''}</button>
     ${fc?'<button class="btn sm gho" onclick="clearLib()">Clear</button>':''}
     <select onchange="LIB.sort=this.value;renderNotes()" title="Sort order">
       ${[['new','newest first'],['old','oldest first'],['author','sort: author'],['title','sort: title'],['year','sort: pub date'],['page','sort: work + page'],['pagenum','sort: page number']].map(([v,l])=>`<option value="${v}" ${LIB.sort===v?'selected':''}>${l}</option>`).join('')}
@@ -1496,10 +1510,10 @@ function filtersPopHtml(){
   const counts=tagCounts(),pinned=(DB.settings.pinned_tags||[]);
   const top=[...pinned,...Object.keys(counts).filter(t=>!pinned.includes(t)).sort((a,b)=>counts[b]-counts[a]).slice(0,10)];
   const ff=filterableFields().filter(f=>!LIB.purpose||f.purpose===LIB.purpose);
-  return `<div class="fpop" id="filters-pop">
+  return `<div class="fpop${FILTERS_OPEN?' open':''}" id="filters-pop">
     <div class="row" style="margin-bottom:4px"><b class="small">Filters</b><span style="flex:1"></span>
       <button class="btn sm gho" onclick="clearLib()">Clear all</button>
-      <button class="btn sm sec" onclick="togCls('filters-pop')">Done</button></div>
+      <button class="btn sm sec" onclick="toggleFilters()">Done</button></div>
     <details class="grp" open><summary>Search in</summary><div class="gi">
       <span class="chip ${LIB.inQ?'on':''}" onclick="LIB.inQ=!LIB.inQ;renderNotes()">quotes</span>
       <span class="chip ${LIB.inN?'on':''}" onclick="LIB.inN=!LIB.inN;renderNotes()">notes</span>
@@ -1522,10 +1536,11 @@ function filtersPopHtml(){
       <input placeholder="e.g. Romans 8 or John 3:16" value="${esc(LIB.scripture)}" style="flex:1" oninput="LIB.scripture=this.value;renderNotesList();refreshPager()">
     </div></details>
     <details class="grp" ${(LIB.person||LIB.work)?'open':''}><summary>Author &amp; work</summary><div class="gi">
-      <select onchange="LIB.person=this.value;renderNotes()"><option value="">any author</option>
+      <select onchange="setLibPerson(this.value)"><option value="">any author</option>
         ${DB.people.map(p=>`<option value="${p.id}" ${LIB.person===p.id?'selected':''}>${esc(invertName(p))}</option>`).join('')}</select>
-      <select onchange="LIB.work=this.value;renderNotes()"><option value="">any work</option>
-        ${DB.works.map(w=>`<option value="${w.id}" ${LIB.work===w.id?'selected':''}>${esc(w.title)}</option>`).join('')}</select>
+      <select onchange="LIB.work=this.value;renderNotes()"><option value="">${LIB.person?'any work by this author':'any work'}</option>
+        ${(LIB.person?DB.works.filter(w=>DB.wc.some(c=>c.work_id===w.id&&c.person_id===LIB.person)):DB.works)
+          .map(w=>`<option value="${w.id}" ${LIB.work===w.id?'selected':''}>${esc(w.title)}</option>`).join('')}</select>
     </div></details>
     <details class="grp"><summary>Saved views</summary><div class="gi">
       <select id="lib-views" onchange="applyView(this.value)"><option value="">saved views…</option>
@@ -1549,8 +1564,10 @@ function listColHtml(){
   </div>`;
 }
 
-function renderNotesList(){
+function renderNotesList(keepScroll){
   const rs=libResults();
+  const _el=$('lib-results');
+  const _pos=(keepScroll!==undefined)?keepScroll:(_el?_el.scrollTop:0);
   const host=$('lib-results');
   const cnt=$('lib-count');if(cnt)cnt.innerHTML=`${DB.notes.length} notes · <b>${rs.length} shown</b>`;
   const sc=$('strip-count');if(sc)sc.textContent=rs.length;
@@ -1573,6 +1590,7 @@ function renderNotesList(){
   });
   host.innerHTML=out||'<p class="small muted" style="padding:14px">No notes match these filters.</p>';
   if(rs.length>400)host.innerHTML+='<p class="small muted" style="padding:10px 14px">Showing first 400.</p>';
+  host.scrollTop=_pos;   // selecting a row must not scroll the list back to the top
 }
 
 function panesHtml(){
@@ -1593,8 +1611,6 @@ function factsStripHtml(){
     ${(CUR.purposes||[]).map(p=>`<span class="fact acc">${esc(p)}</span>`).join('')}
     ${(CUR.scripture_refs||[]).slice(0,3).map(r=>`<span class="fact">📖 ${esc(refLabel(r))}</span>`).join('')}
     ${(CUR.tags||[]).length?`<span class="fact">${CUR.tags.length} tags</span>`:''}
-    <span style="flex:1"></span>
-    <button class="btn sm gho" onclick="toggleDet()">Show details «</button>
   </div>`;
 }
 
@@ -1733,7 +1749,7 @@ addEventListener('keydown',e=>{
 addEventListener('click',e=>{
   if(!e.target.closest)return;
   if(!e.target.closest('.menuwrap'))  {const m=$('note-menu');if(m)m.classList.remove('open')}
-  if(!e.target.closest('.popwrap'))   {const m=$('filters-pop');if(m)m.classList.remove('open')}
+  if(!e.target.closest('.popwrap'))   {const m=$('filters-pop');if(m)m.classList.remove('open');FILTERS_OPEN=false}
 },true);
 
 </script>
@@ -1750,7 +1766,16 @@ function deleteView(){const el=$('lib-views');if(!el||!el.value){toast('Choose a
 function gotoWorkNotes(wid){LIB.q='';LIB.tags=[];LIB.purpose='';LIB.person='';LIB.scripture='';LIB.work=wid;LIB.sort='page';LIB.selMode=false;LIB.sel=new Set();LIB.pf={};showList();nav('notes')}
 function sortNotes(arr){
   const st=LIB.sort||'new';
-  const firstPage=n=>{const l=(n.locators||[]).find(x=>x.type==='page');const v=l?parseFloat(String(l.value).replace(/[^\d.]/g,'')):NaN;return isNaN(v)?Infinity:v};
+  /* Page sort considers ONLY page-type locators, ignoring chapter/kindle/EEBO alongside them.
+     Every number in every page locator is collected and the lowest wins, so a range ("193-195")
+     sorts at 193 and a record with two page locators sorts by its earliest. The old version
+     stripped non-digits from the whole string, turning "193-195" into 193195. */
+  const firstPage=n=>{
+    const nums=(n.locators||[]).filter(x=>x.type==='page')
+      .flatMap(x=>String(x.value).match(/\d+(?:\.\d+)?/g)||[])
+      .map(Number).filter(v=>!isNaN(v));
+    return nums.length?Math.min(...nums):Infinity;
+  };
   const aw=n=>{const w=W(n.work_id);if(!w)return'zzzz';const p=contribs(w.id,'author')[0]||contribs(w.id,'editor')[0];return p?(p.sort_name||p.name):'zzzz'};
   const wt=n=>{const w=W(n.work_id);return w?w.title:'zzzz'};
   const yr=n=>{const w=W(n.work_id);const y=w&&w.pub?parseInt(w.pub.year):NaN;return isNaN(y)?Infinity:y};
@@ -2049,7 +2074,7 @@ function renderSettings(){
   </div>
   <div class="card set-section">
     <h3>Account</h3>
-    <p class="small muted">${esc((USER&&USER.email)||'')} · Notes on Books v2.0-beta2 (next.html)</p>
+    <p class="small muted">${esc((USER&&USER.email)||'')} · Notes on Books v2.0-beta3 (next.html)</p>
     <button class="btn sec" onclick="sb.auth.signOut().then(()=>location.reload())">Sign out</button>
   </div>`;
   const pinIn=$('pin-in');if(pinIn)makeAutocomplete(pinIn,allTags,{onEnter:v=>{pinIn.value=v;pin(v)}});
