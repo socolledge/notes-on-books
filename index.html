@@ -53,6 +53,132 @@ mark.lib-hit{background:var(--hl-search)}
 #appbar nav button{background:none;border:none;border-radius:7px;padding:7px 12px;font-size:13.5px;color:var(--muted);font-weight:600;white-space:nowrap}
 #appbar nav button.on{background:var(--chip);color:var(--ink)}
 #main{max-width:1180px;margin:0 auto;padding:14px 14px calc(30px + env(safe-area-inset-bottom))}
+
+/* ================= v2 shell: fixed-height flex, internal scrolling =================
+   The app fills the visual viewport exactly, so nothing scrolls the document. That
+   retires the sticky pane-head hack — a toolbar can't scroll off-screen if the page
+   itself never scrolls — and it means the iOS keyboard shrinks the app rather than
+   pushing its chrome out of view. --app-h is measured from visualViewport in JS. */
+body.v2{overflow:hidden}
+body.v2 #app{display:flex;flex-direction:column;height:var(--app-h,100vh)}
+body.v2 #appbar{position:static;flex:0 0 auto}
+body.v2 #main{flex:1;min-height:0;max-width:none;margin:0;padding:0;display:flex;flex-direction:column}
+body.v2 #view-works,body.v2 #view-people,body.v2 #view-settings{
+  flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;width:100%;
+  max-width:1180px;margin:0 auto;padding:14px 14px calc(30px + env(safe-area-inset-bottom))}
+#view-notes{flex:1;display:flex;flex-direction:column;min-height:0}
+.notesbody{flex:1;display:flex;min-height:0;position:relative}
+
+/* ghost button — NOTE: must set color, or it inherits .btn's white and vanishes */
+.btn.gho{background:none;border:1px solid var(--line);color:var(--ink)}
+.btn.gho:hover{background:var(--chip)}
+
+/* tool row */
+.toolrow{display:flex;align-items:center;gap:7px;padding:7px 12px;background:var(--panel);
+  border-bottom:1px solid var(--line);flex:0 0 auto;flex-wrap:wrap}
+.pager{display:flex;align-items:center;gap:2px;background:var(--chip);border-radius:8px;padding:2px;flex:0 0 auto}
+.pager button{background:none;border:none;border-radius:6px;padding:4px 9px;font-size:14px;line-height:1;color:var(--ink)}
+.pager button:hover{background:#e3dccf}
+.pager button:disabled{opacity:.35}
+.pager .pos{font-size:12px;color:var(--muted);padding:0 4px;white-space:nowrap;font-variant-numeric:tabular-nums}
+
+/* results list */
+.listcol{flex:0 0 var(--listw,330px);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0;background:var(--panel)}
+.listhead{padding:8px 11px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px;flex:0 0 auto}
+.listscroll{overflow-y:auto;-webkit-overflow-scrolling:touch;flex:1}
+.nrow{padding:11px 13px;border-bottom:1px solid var(--line);cursor:pointer;display:block;width:100%;text-align:left;background:none;border-left:3px solid transparent;font-family:var(--sans)}
+.nrow:hover{background:#fbf9f6}
+.nrow.on{background:#f4efe7;border-left-color:var(--accent)}
+.nrow .r1{font-size:12px;color:var(--muted);display:flex;gap:6px;align-items:baseline;margin-bottom:3px;flex-wrap:wrap}
+.nrow .r1 b{color:var(--ink);font-weight:600}
+.nrow .r2{font-family:var(--serif);font-size:14.5px;line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;color:var(--ink)}
+.nrow .r3{margin-top:6px;display:flex;gap:4px;flex-wrap:wrap}
+.nrow .tg{font-size:10.5px;background:var(--chip);border-radius:999px;padding:2px 7px;color:var(--muted)}
+.groupbar{position:sticky;top:0;background:#f4efe7;border-bottom:1px solid var(--line);padding:6px 13px;
+  font-size:11.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);z-index:2}
+
+/* note detail column */
+.detail{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0}
+.v2panes{flex:1;display:flex;gap:12px;padding:12px;min-height:0}
+.v2pane{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:12px;display:flex;flex-direction:column;min-width:0;min-height:0}
+.v2pane .pane-head{position:static;flex:0 0 auto;flex-wrap:wrap}
+.v2pane .rte{min-height:0;flex:1}
+.facts-strip{flex:0 0 auto;display:flex;align-items:center;gap:5px;flex-wrap:wrap;padding:7px 12px;
+  background:var(--panel);border-bottom:1px solid var(--line)}
+.facts-strip .fcite{font-family:var(--serif);font-size:13px;margin-right:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:42%}
+.fact{font-size:11px;background:var(--chip);border-radius:999px;padding:2px 8px;color:var(--muted);white-space:nowrap}
+.fact.acc{background:#efe4d6;color:var(--accent)}
+
+/* details panel */
+.dpanel{flex:0 0 var(--dpanelw,300px);background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.dpanel .dhd{padding:8px 11px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:7px;flex:0 0 auto}
+.dpanel .dhd .t{font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.dpanel .dsc{overflow-y:auto;-webkit-overflow-scrolling:touch;flex:1;padding-bottom:18px}
+.blk{padding:10px 12px;border-bottom:1px solid var(--line)}
+.blk .bh{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+.blk .bh .lbl{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.blk .bh .add{margin-left:auto;background:none;border:1px solid var(--line);border-radius:6px;min-width:24px;height:24px;font-size:13px;line-height:1;color:var(--muted);padding:0 5px}
+.blk .bh .add:hover{background:var(--chip);color:var(--ink)}
+.blk .vals{display:flex;flex-wrap:wrap;gap:5px}
+.blk .dcite{font-family:var(--serif);font-size:13.5px;line-height:1.45}
+.blk .dcite i{font-style:italic}
+.blk .kv{display:flex;justify-content:space-between;gap:8px;font-size:12.5px;padding:3px 0}
+.blk .kv span{color:var(--muted)}
+.blk .kv b{font-weight:600;text-align:right}
+.blk .edit{display:none;margin-top:8px}
+.blk .edit.open{display:block}
+
+/* collapsed side strips */
+.strip{flex:0 0 42px;background:var(--panel);display:flex;flex-direction:column;align-items:center;gap:10px;padding:10px 0;cursor:pointer;border:none}
+.strip.l{border-right:1px solid var(--line)}
+.strip.r{border-left:1px solid var(--line)}
+.strip:hover{background:#f7f3ed}
+.strip .ico{width:30px;height:30px;border-radius:8px;background:var(--chip);display:flex;align-items:center;justify-content:center;font-size:14px}
+.strip .vlabel{writing-mode:vertical-rl;font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+.strip .n{font-size:10px;font-weight:700;color:#fff;background:var(--accent);border-radius:999px;padding:1px 5px}
+
+/* filters popover + overflow menu */
+.popwrap{position:relative;flex:0 0 auto}
+.fpop{position:absolute;z-index:60;top:100%;left:10px;right:10px;max-width:760px;background:var(--panel);
+  border:1px solid var(--line);border-radius:13px;box-shadow:0 14px 40px rgba(60,48,32,.2);padding:14px;
+  display:none;max-height:70vh;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.fpop.open{display:block}
+.grp{border-bottom:1px solid var(--line)}
+.grp>summary{cursor:pointer;list-style:none;padding:9px 2px;font-size:11.5px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.05em;color:var(--muted);display:flex;align-items:center;gap:7px}
+.grp>summary::-webkit-details-marker{display:none}
+.grp>summary::before{content:'▸';transition:transform .15s;font-size:11px}
+.grp[open]>summary::before{transform:rotate(90deg)}
+.grp .gi{padding:0 2px 12px;display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+.menuwrap{position:relative;display:inline-flex}
+.omenu{position:absolute;right:0;top:100%;margin-top:5px;background:var(--panel);border:1px solid var(--line);
+  border-radius:10px;box-shadow:0 10px 30px rgba(60,48,32,.18);min-width:200px;padding:5px;display:none;z-index:90}
+.omenu.open{display:block}
+.omenu button{display:block;width:100%;text-align:left;background:none;border:none;padding:9px 11px;border-radius:7px;font-size:13.5px;color:var(--ink)}
+.omenu button:hover{background:var(--chip)}
+.omenu button.dgr{color:var(--danger)}
+.omenu hr{border:none;border-top:1px solid var(--line);margin:4px 2px}
+.savestate{font-size:12.5px;color:var(--muted);white-space:nowrap;display:inline-flex;align-items:center;gap:5px}
+.savestate.warn{color:var(--danger);font-weight:600}
+
+/* responsive */
+@media(max-width:1180px){:root{--listw:280px;--dpanelw:270px}}
+@media(max-width:1000px){
+  .dpanel{position:absolute;z-index:70;top:0;bottom:0;right:0;width:290px;flex-basis:290px;box-shadow:0 0 40px rgba(60,48,32,.18)}
+  :root{--listw:250px}
+  .v2panes{flex-direction:column}
+}
+@media(max-width:760px){
+  .strip{display:none}
+  .listcol{flex:1 1 auto;border-right:none}
+  .detail{position:absolute;inset:0;background:var(--bg);z-index:40}
+  body.stack-list .detail{display:none}
+  body.stack-detail .listcol{display:none}
+  .dpanel{width:100%;flex-basis:100%}
+  .v2panes{padding:9px;gap:9px}
+  .backbtn{display:inline-flex!important}
+}
+.backbtn{display:none}
 /* ---------- editor ribbon ---------- */
 #ribbon{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:12px}
 #ribbon .rib-row{display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap;padding:5px 0}
@@ -71,6 +197,9 @@ mark.lib-hit{background:var(--hl-search)}
 .rte{flex:1;padding:14px 16px;font-family:var(--serif);font-size:16.5px;line-height:1.65;overflow-y:auto;min-height:220px}
 .rte:empty:before{content:attr(data-ph);color:var(--muted);font-style:italic}
 .rte p{margin:0 0 .8em}
+.rte ul,.rte ol{margin:0 0 .8em;padding-left:1.5em}
+.rte li{margin:.15em 0}
+.note-card ul,.note-card ol{margin:0 0 .6em;padding-left:1.4em}
 /* ---------- library list ---------- */
 .note-card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:10px}
 .note-card .q{font-family:var(--serif);font-size:17px;line-height:1.6;border-left:3px solid var(--accent2);padding-left:12px;margin:8px 0}
@@ -152,17 +281,26 @@ table.tags td{border-bottom:1px solid var(--line);padding:6px 8px;font-size:13.5
   <div id="appbar">
     <span class="brand"><svg viewBox="0 -14 120 145" width="15" height="18" style="vertical-align:-3px;margin-right:5px" aria-hidden="true"><use href="#feather-art"/></svg>Notes on Books</span>
     <nav>
-      <button data-v="editor" class="on" onclick="nav('editor')">Editor</button>
-      <button data-v="library" onclick="nav('library')">Library</button>
+      <button data-v="notes" class="on" onclick="nav('notes')">Notes</button>
       <button data-v="works" onclick="nav('works')">Works</button>
       <button data-v="people" onclick="nav('people')">Authors</button>
       <button data-v="settings" onclick="nav('settings')">Settings</button>
     </nav>
-    <button class="btn sm sec" onclick="newNote()">+ New note</button>
+    <span id="save-status" class="savestate"></span>
+    <button id="btn-samebook" class="btn sm sec" onclick="newNoteSameBook()">+ New (same book)</button>
+    <span class="menuwrap">
+      <button class="btn sm gho" onclick="togCls('note-menu')" title="More actions">⋯</button>
+      <div class="omenu" id="note-menu">
+        <button onclick="togCls('note-menu');saveNote()">💾 Save now</button>
+        <button onclick="togCls('note-menu');duplicateNote()">Duplicate note</button>
+        <hr>
+        <button class="dgr" onclick="togCls('note-menu');deleteNote()">Delete note</button>
+      </div>
+    </span>
+    <button class="btn sm" onclick="newNote()">+ New note</button>
   </div>
   <div id="main">
-    <div id="view-editor"></div>
-    <div id="view-library" class="hidden"></div>
+    <div id="view-notes"></div>
     <div id="view-works" class="hidden"></div>
     <div id="view-people" class="hidden"></div>
     <div id="view-settings" class="hidden"></div>
@@ -228,16 +366,23 @@ window.addEventListener('resize',syncAppbarHeight);
 // iOS Safari: when the virtual keyboard opens, the visual viewport shrinks and can shift
 // downward relative to the layout viewport (which position:sticky is anchored to), pushing
 // sticky toolbars up out of the visible area. Compensate by tracking visualViewport.offsetTop.
+function syncAppHeight(){
+  const vv=window.visualViewport;
+  const h=Math.round(vv?vv.height:window.innerHeight);
+  if(h>0)document.documentElement.style.setProperty('--app-h',h+'px');
+}
 function syncViewportOffset(){
   if(!window.visualViewport)return;
   const off=Math.max(0,Math.round(window.visualViewport.offsetTop||0));
   document.documentElement.style.setProperty('--vv-offset',off+'px');
 }
 if(window.visualViewport){
-  window.visualViewport.addEventListener('resize',syncViewportOffset);
+  window.visualViewport.addEventListener('resize',()=>{syncViewportOffset();syncAppHeight()});
   window.visualViewport.addEventListener('scroll',syncViewportOffset);
-  syncViewportOffset();
+  syncViewportOffset();syncAppHeight();
 }
+window.addEventListener('resize',syncAppHeight);
+window.addEventListener('orientationchange',()=>setTimeout(syncAppHeight,180));
 document.addEventListener('focusin',e=>{
   if(e.target&&e.target.closest&&e.target.closest('.rte')){
     syncViewportOffset();
@@ -254,7 +399,7 @@ function boot(){
   if(!url||!key){show('setup');return}
   sb=window.supabase.createClient(url,key);
   sb.auth.getSession().then(async({data})=>{
-    if(data.session){USER=data.session.user;await loadAll();show('app');renderAll()}
+    if(data.session){USER=data.session.user;await loadAll();show('app');document.body.classList.add('v2','stack-list');syncAppHeight();nav('notes')}
     else show('auth');
   });
 }
@@ -268,12 +413,12 @@ function resetSetup(){localStorage.removeItem('nob_url');localStorage.removeItem
 async function signIn(){
   const{data,error}=await sb.auth.signInWithPassword({email:$('auth-email').value.trim(),password:$('auth-pass').value});
   if(error){$('auth-msg').textContent=error.message;return}
-  USER=data.user;await loadAll();show('app');renderAll();
+  USER=data.user;await loadAll();show('app');document.body.classList.add('v2','stack-list');syncAppHeight();nav('notes');
 }
 async function signUp(){
   const{data,error}=await sb.auth.signUp({email:$('auth-email').value.trim(),password:$('auth-pass').value});
   if(error){$('auth-msg').textContent=error.message;return}
-  if(data.session){USER=data.user;await loadAll();show('app');renderAll()}
+  if(data.session){USER=data.user;await loadAll();show('app');document.body.classList.add('v2','stack-list');syncAppHeight();nav('notes')}
   else $('auth-msg').textContent='Account created. Check your email to confirm, then sign in.';
 }
 async function loadAll(){
@@ -696,130 +841,40 @@ function copyNote(n,mode){ // mode: quote | quote_cite | cite | bib
 <script>
 /* ================= nav ================= */
 function nav(v){
+  if(v==='editor'||v==='library')v='notes';
   document.querySelectorAll('#appbar nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
-  ['editor','library','works','people','settings'].forEach(x=>$('view-'+x).classList.toggle('hidden',x!==v));
-  if(v==='library')renderLibrary();
+  ['notes','works','people','settings'].forEach(x=>$('view-'+x).classList.toggle('hidden',x!==v));
+  const noteOnly=(v==='notes');
+  ['save-status','btn-samebook'].forEach(id=>{const e=$(id);if(e)e.style.display=noteOnly?'':'none'});
+  if(v==='notes')renderNotes();
   if(v==='works')renderWorks();
   if(v==='people')renderPeople();
   if(v==='settings')renderSettings();
 }
-function renderAll(){renderEditor();renderLibrary();}
+function renderAll(){renderNotes()}
+function renderEditor(){renderNotes()}
+function renderLibrary(){renderNotes()}
+function renderLibResults(){renderNotesList()}
 
 /* ================= editor ================= */
 function blankNote(){return{id:null,work_id:null,quote_html:'',note_html:'',locators:[],scripture_refs:[],tags:[],purposes:[],purpose_values:{},chapter_title:'',chapter_author:'',date_added:new Date().toISOString()}}
-async function newNote(){await flushSave();CUR=blankNote();nav('editor');renderEditor()}
+async function newNote(){await flushSave();CUR=blankNote();showDetail();nav('notes');renderNotes()}
 async function newNoteSameAuthor(){
   if(!CUR||!CUR.work_id)return;
   const wid=CUR.work_id,authorSel=CUR._authorSel,purposes=[...(CUR.purposes||[])];
   await flushSave();
   CUR=blankNote();
   CUR.work_id=wid;CUR._authorSel=authorSel;CUR.purposes=purposes;
-  nav('editor');renderEditor();
+  showDetail();nav('notes');renderNotes();
 }
-async function editNote(id){await flushSave();CUR=JSON.parse(JSON.stringify(DB.notes.find(n=>n.id===id)));nav('editor');renderEditor()}
+async function editNote(id){await openNote(id);nav('notes')}
 const tagChip=t=>`<span class="chip on">${esc(t)}<span class="x" onclick="rmTag('${esc(t).replace(/'/g,"\\'")}')">×</span></span>`;
 const pinChip=t=>`<span class="chip ${CUR.tags.includes(t)?'on':''}" onclick="toggleTag('${esc(t).replace(/'/g,"\\'")}')">${esc(t)}</span>`;
 const locChip=(l,i)=>`<span class="chip">${esc(LOC_TYPES[l.type]||l.type)}: ${esc(l.value)}<span class="x" onclick="rmLoc(${i})">×</span></span>`;
 const scriptureChip=(r,i)=>`<span class="chip">📖 ${esc(refLabel(r))}<span class="x" onclick="rmScriptureRef(${i})">×</span></span>`;
 
-function renderEditor(){
-  if(!CUR)CUR=blankNote();
-  if(!CUR.scripture_refs)CUR.scripture_refs=[];
-  const w=W(CUR.work_id);
-  const selAuthor=w?(contribs(w.id,'author')[0]||contribs(w.id,'editor')[0]||{}).id:CUR._authorSel;
-  const authorOpts=DB.people.map(p=>`<option value="${p.id}" ${p.id===selAuthor?'selected':''}>${esc(invertName(p))}</option>`).join('');
-  const worksOf=selAuthor?DB.works.filter(x=>DB.wc.some(c=>c.work_id===x.id&&c.person_id===selAuthor)):DB.works;
-  const workOpts=worksOf.map(x=>`<option value="${x.id}" ${x.id===CUR.work_id?'selected':''}>${esc(x.title)}</option>`).join('');
-  const c=w?citeWork(w,{form:'note',locators:CUR.locators,chapter_title:CUR.chapter_title,chapter_author:CUR.chapter_author}):{html:'<span class="muted">No work selected — choose or create one.</span>'};
-  const surrogate=w&&w.source_status!=='published';
-  const pinned=(DB.settings.pinned_tags||[]).map(pinChip).join('');
-  const curTags=CUR.tags.map(tagChip).join('');
-  const purpChips=DB.purposes.map(p=>`<span class="chip ${CUR.purposes.includes(p.name)?'on':''}" onclick="togglePurpose('${esc(p.name).replace(/'/g,"\\'")}')">${esc(p.name)}</span>`).join('');
-  const locRows=(CUR.locators||[]).map(locChip).join('');
-  const scrRows=(CUR.scripture_refs||[]).map(scriptureChip).join('');
-  $('view-editor').innerHTML=`
-  <div id="ribbon">
-    <div class="rib-row">
-      <div class="fieldcol"><label>Author</label>
-        <select id="ed-author" onchange="pickAuthor(this.value)"><option value="">— all authors —</option>${authorOpts}</select></div>
-      <div class="fieldcol"><label>Work</label>
-        <select id="ed-work" onchange="pickWork(this.value)"><option value="">— select work —</option>${workOpts}</select></div>
-      <div class="fieldcol"><label>&nbsp;</label><div class="row">
-        <button class="btn sm sec" onclick="openWorkModal(null)">+ New work</button>
-        ${w?`<button class="btn sm sec" onclick="openWorkModal('${w.id}')">Edit work</button>`:''}
-      </div></div>
-      <div class="fieldcol" style="flex:1;min-width:200px"><label>Citation preview (${esc(styleLabel())} footnote)</label>
-        <div id="cite-preview">${c.html}${surrogate?' <span class="badge">'+esc(w.source_status)+' — cite original</span>':''}</div></div>
-      <div class="fieldcol"><label>Copy</label><div class="row">
-        <button class="btn sm sec" onclick="copyCur('quote')">Quote</button>
-        <button class="btn sm sec" onclick="copyCur('quote_cite')">Quote + cite</button>
-        <button class="btn sm sec" onclick="copyCur('cite')">Citation</button>
-        <button class="btn sm sec" onclick="copyCur('bib')">Bibliography</button>
-      </div></div>
-    </div>
-    <div class="rib-row">
-      <div class="fieldcol"><label>Locators</label><div class="row"><span id="loc-chips" class="row">${locRows}</span>
-        <select id="loc-type">${Object.entries(LOC_TYPES).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select>
-        <input id="loc-val" placeholder="value" style="width:110px" onkeydown="if(event.key==='Enter'){event.preventDefault();addLoc()}" onblur="setTimeout(addLoc,120)">
-        <button class="btn sm sec" onclick="addLoc()">Add</button></div></div>
-      <div class="fieldcol"><label>Chapter (edited volumes)</label><div class="row">
-        <input id="ed-chtitle" placeholder="Chapter title" value="${esc(CUR.chapter_title)}" onchange="CUR.chapter_title=this.value;refreshCite()" style="width:170px">
-        <input id="ed-chauthor" placeholder="Chapter author" value="${esc(CUR.chapter_author)}" onchange="CUR.chapter_author=this.value;refreshCite()" style="width:150px"></div></div>
-      <div class="fieldcol"><label>Purpose</label><div class="row">${purpChips||'<span class="muted small">none defined</span>'}</div></div>
-    </div>
-    <div class="rib-row">
-      <div class="fieldcol" style="flex:1">
-        <label>Scripture references</label>
-        <div class="row" style="flex-wrap:wrap"><span id="scr-chips" class="row">${scrRows}</span></div>
-        <div class="row" style="margin-top:4px;flex-wrap:wrap">
-          <select id="scr-test" onchange="scrTestChange()">
-            <option value="OT">Old Testament</option>
-            <option value="NT">New Testament</option>
-            <option value="AP">Apocrypha</option>
-          </select>
-          <select id="scr-book" onchange="scrBookChange()"></select>
-          <select id="scr-ch"></select>
-          <span class="small muted">:</span>
-          <input id="scr-vs" placeholder="verse" style="width:56px" onkeydown="if(event.key==='Enter'){event.preventDefault();addScriptureRef()}">
-          <span class="small muted">–</span>
-          <input id="scr-ve" placeholder="end (opt.)" style="width:72px" onkeydown="if(event.key==='Enter'){event.preventDefault();addScriptureRef()}">
-          <button class="btn sm sec" onclick="addScriptureRef()">Add</button>
-        </div>
-        <div class="row" style="margin-top:4px">
-          <input id="scr-text" placeholder="or type directly, e.g. John 3:16-21" style="width:230px" onkeydown="if(event.key==='Enter'){event.preventDefault();addScriptureRefFromText()}">
-          <button class="btn sm sec" onclick="addScriptureRefFromText()">Add</button>
-        </div>
-      </div>
-    </div>
-    <div id="purpose-fields"></div>
-    <div class="rib-row">
-      <div class="fieldcol" style="flex:1"><label>Tags</label><div class="row">
-        <span id="pin-tags" class="row">${pinned}</span><span style="border-left:1px solid var(--line);height:20px"></span><span id="cur-tags" class="row">${curTags}</span>
-        <input id="tag-in" placeholder="add tag… (Enter)" style="width:140px" autocomplete="off">
-      </div></div>
-    </div>
-  </div>
-  <div id="panes">
-    <div class="pane"><div class="pane-head"><span class="ttl">Quote</span>${rteBar('q')}</div>
-      <div class="rte" id="rte-q" contenteditable="true" data-ph="Paste or type the quotation…"></div></div>
-    <div class="pane"><div class="pane-head"><span class="ttl">My notes</span>${rteBar('n')}</div>
-      <div class="rte" id="rte-n" contenteditable="true" data-ph="Your thoughts on this passage…"></div></div>
-  </div>
-  <div class="row" style="margin-top:12px">
-    <button class="btn" onclick="saveNote()">💾 Save now</button>
-    <button class="btn sec" ${CUR.work_id?'':'disabled style="opacity:.5;cursor:default"'} onclick="newNoteSameAuthor()" title="${CUR.work_id?'Start a new note with the same author, work, and purpose':'Select a work first'}">New (same author)</button>
-    <button class="btn sec" onclick="newNote()">New</button>
-    ${CUR.id?'<button class="btn danger" onclick="deleteNote()">Delete</button>':''}
-    <span class="muted small">${CUR.id?'Editing existing note':'New note'} · autosaves as you type · ${new Date(CUR.date_added).toLocaleDateString()}</span>
-    <span id="save-status" class="muted small"></span>
-  </div>`;
-  $('rte-q').innerHTML=CUR.quote_html||'';
-  $('rte-n').innerHTML=CUR.note_html||'';
-  ['q','n'].forEach(k=>{const el=$('rte-'+k);el.addEventListener('input',()=>{dirty=true;scheduleSave()});el.addEventListener('paste',sanitizePaste);el.addEventListener('keydown',rteShortcut)});
-  renderPurposeFields();
-  initScriptureSelects();
-  const tagIn=$('tag-in');if(tagIn)makeAutocomplete(tagIn,allTags,{onEnter:v=>{tagIn.value=v;addTagFromInput()}});
-}
+/* renderEditorOld removed — superseded by renderNotes() */
+
 function scriptureBookOptions(test){return BIBLE_BOOKS.filter(b=>b.test===test).map(b=>`<option value="${esc(b.name)}">${esc(b.name)}</option>`).join('')}
 function scriptureChapterOptions(bookName){const b=BIBLE_BOOKS.find(x=>x.name===bookName);if(!b)return'';return bookChapterList(b).map(c=>`<option value="${c}">${c}</option>`).join('')}
 function initScriptureSelects(){const t=$('scr-test');if(!t)return;t.value='OT';scrTestChange()}
@@ -887,7 +942,10 @@ function sanitizePaste(e){
           else if(tag==='I'||tag==='EM')r+='<i>'+inner+'</i>';
           else if(tag==='U')r+='<u>'+inner+'</u>';
           else if(tag==='MARK')r+='<mark>'+inner+'</mark>';
-          else if(tag==='P'||tag==='DIV'||tag==='LI'||tag==='TR'||/^H\d$/.test(tag))r+='<p>'+inner+'</p>';
+          else if(tag==='UL')r+='<ul>'+inner+'</ul>';
+          else if(tag==='OL')r+='<ol>'+inner+'</ol>';
+          else if(tag==='LI')r+='<li>'+inner+'</li>';
+          else if(tag==='P'||tag==='DIV'||tag==='TR'||/^H\d$/.test(tag))r+='<p>'+inner+'</p>';
           else if(tag!=='STYLE'&&tag!=='SCRIPT'&&tag!=='HEAD')r+=inner;
         }
       });
@@ -902,6 +960,8 @@ function sanitizePaste(e){
 function rteBar(k){
   const b=(cmd,lab,arg)=>`<button class="tbtn" onmousedown="event.preventDefault();fmt('${cmd}','${arg||''}')" title="${cmd}">${lab}</button>`;
   return b('bold','<b>B</b>')+b('italic','<i>I</i>')+b('underline','<u>U</u>')+
+    `<button class="tbtn" onmousedown="event.preventDefault();fmt('insertUnorderedList')" title="bulleted list">&bull;&nbsp;&#8801;</button>`+
+    `<button class="tbtn" onmousedown="event.preventDefault();fmt('insertOrderedList')" title="numbered list">1.&nbsp;&#8801;</button>`+
     `<button class="tbtn" style="background:var(--hl)" onmousedown="event.preventDefault();fmt('hiliteColor','','#fdf0a8')" title="highlight">✺</button>`+
     `<button class="tbtn" onmousedown="event.preventDefault();fmt('hiliteColor','','transparent')" title="remove highlight">⌫✺</button>`+
     `<button class="tbtn" onmousedown="event.preventDefault();clearFormatting('${k}')" title="clear formatting — clears the selection, or the whole box if nothing's selected">Tx</button>`+
@@ -969,28 +1029,50 @@ function renderPurposeFields(){
 function setPV(pn,key,val){if(!CUR.purpose_values)CUR.purpose_values={};if(!CUR.purpose_values[pn])CUR.purpose_values[pn]={};CUR.purpose_values[pn][key]=val}
 function copyCur(mode){syncPanes();copyNote(CUR,mode)}
 let saveTimer=null;
-function scheduleSave(){if(!CUR)return;clearTimeout(saveTimer);const st=$('save-status');if(st)st.textContent='· unsaved…';saveTimer=setTimeout(()=>saveNote(true),1200)}
-async function flushSave(){if(saveTimer){clearTimeout(saveTimer);saveTimer=null;if(CUR)await saveNote(true)}}
+function scheduleSave(){if(!CUR)return;clearTimeout(saveTimer);setSaveState('dirty');saveTimer=setTimeout(()=>saveNote(true),1200)}
+async function flushSave(){
+  if(saveTimer){clearTimeout(saveTimer);saveTimer=null;if(CUR)await saveNote(true)}
+  if(SAVE_INFLIGHT){try{await SAVE_INFLIGHT}catch(e){}}   // don't switch notes mid-write
+}
+/* Closing the tab, switching apps, or iOS suspending the page used to lose anything typed
+   in the last ~1.2s. Flush on the way out. */
+addEventListener('pagehide',()=>{if(saveTimer)flushSave()});
+addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'&&saveTimer)flushSave()});
+let SAVE_INFLIGHT=null;
+/* CRITICAL: everything after an `await` must use `target`, never `CUR`.
+   CUR is reassigned the instant you click another result card, so any post-await
+   reference to it can write this note's content into whichever note you moved to.
+   That race silently replaced one record with a duplicate of another. */
 async function saveNote(auto){
   clearTimeout(saveTimer);saveTimer=null;
   syncPanes();
-  if(!stripHtml(CUR.quote_html).trim()&&!stripHtml(CUR.note_html).trim()){if(!auto)toast('Nothing to save');return}
-  const rec={work_id:CUR.work_id,quote_html:CUR.quote_html,note_html:CUR.note_html,locators:CUR.locators,scripture_refs:CUR.scripture_refs||[],tags:CUR.tags,purposes:CUR.purposes,purpose_values:CUR.purpose_values,chapter_title:CUR.chapter_title,chapter_author:CUR.chapter_author,updated_at:new Date().toISOString()};
-  const target=CUR,tid=target.id;   // pin: CUR changes the moment another note is opened
-  if(tid){
-    const{error}=await sb.from('notes').update(rec).eq('id',tid);
-    if(error){toast(error.message);return}
-    const local=DB.notes.find(n=>n.id===tid);
-    if(local)Object.assign(local,rec);
-  }else{
-    rec.date_added=target.date_added;
-    const{data,error}=await sb.from('notes').insert(rec).select().single();
-    if(error){toast(error.message);return}
-    DB.notes.unshift(data);target.id=data.id;
-  }
-  if(CUR===target)dirty=false;
-  const st=$('save-status');if(st)st.textContent='· saved ✓';
-  if(!auto){toast('Saved');renderEditor()}
+  const target=CUR;                       // pin the note being saved
+  const id=target.id;
+  if(!stripHtml(target.quote_html).trim()&&!stripHtml(target.note_html).trim()){if(!auto)toast('Nothing to save');return}
+  const rec={work_id:target.work_id,quote_html:target.quote_html,note_html:target.note_html,locators:target.locators,scripture_refs:target.scripture_refs||[],tags:target.tags,purposes:target.purposes,purpose_values:target.purpose_values,chapter_title:target.chapter_title,chapter_author:target.chapter_author,updated_at:new Date().toISOString()};
+  if(SAVE_INFLIGHT){try{await SAVE_INFLIGHT}catch(e){}}   // never overlap two writes
+  if(CUR===target)setSaveState('saving');
+  const run=(async()=>{
+    if(id){
+      const{error}=await sb.from('notes').update(rec).eq('id',id);
+      if(error)return error;
+      const local=DB.notes.find(n=>n.id===id);   // by pinned id, not by live CUR
+      if(local)Object.assign(local,rec);
+    }else{
+      rec.date_added=target.date_added;
+      const{data,error}=await sb.from('notes').insert(rec).select().single();
+      if(error)return error;
+      DB.notes.unshift(data);target.id=data.id;  // stamp the note we saved, not whatever is open now
+    }
+    return null;
+  })();
+  SAVE_INFLIGHT=run;
+  const error=await run;
+  if(SAVE_INFLIGHT===run)SAVE_INFLIGHT=null;
+  if(error){setSaveState('error');toast('Not saved: '+error.message);return}
+  if(CUR===target){dirty=false;setSaveState('saved')}
+  renderNotesList();refreshPager();
+  if(!auto)toast('Saved');
 }
 async function deleteNote(){
   if(!confirm('Delete this note permanently?'))return;
@@ -1342,6 +1424,334 @@ async function finishKindleImport(wid,ki){
   toast(`Imported ${inserted} note${inserted===1?'':'s'}${skipped?` (${skipped} already present, skipped)`:''}`);
   gotoWorkNotes(wid);
 }
+
+/* ==================== v2 unified Notes view ====================
+   One screen: filtered result list + the open note's quote/notes panes + a details
+   panel. Every element ID the old editor used is preserved (rte-q, rte-n, loc-chips,
+   scr-chips, pin-tags, cur-tags, tag-in, cite-preview, purpose-fields), so all the
+   existing handlers keep working untouched — this is a layout change, not a rewrite. */
+const UI={listHidden:false,detHidden:false};
+try{Object.assign(UI,JSON.parse(localStorage.getItem('nob_ui')||'{}'))}catch(e){}
+function saveUI(){try{localStorage.setItem('nob_ui',JSON.stringify(UI))}catch(e){}}
+let FILTERS_OPEN=false;
+function toggleFilters(){FILTERS_OPEN=!FILTERS_OPEN;renderNotes()}
+function setLibPerson(v){LIB.person=v;
+  if(LIB.work&&v&&!DB.wc.some(c=>c.work_id===LIB.work&&c.person_id===v))LIB.work='';
+  renderNotes()}
+function togCls(id){const e=$(id);if(e)e.classList.toggle('open')}
+function closeMenus(){['note-menu','filters-pop'].forEach(id=>{const e=$(id);if(e)e.classList.remove('open')})}
+
+function activeFilterCount(){
+  let n=0;
+  if(LIB.q&&LIB.q.trim())n++;
+  n+=LIB.tags.length;
+  if(LIB.purpose)n++; if(LIB.person)n++; if(LIB.work)n++;
+  if(LIB.scripture&&LIB.scripture.trim())n++;
+  Object.keys(LIB.pf||{}).forEach(k=>{if((LIB.pf[k]||[]).length)n++});
+  return n;
+}
+function curIndex(rs){return rs.findIndex(n=>CUR&&n.id===CUR.id)}
+
+let PANE_OWNER=null;
+function renderNotes(){
+  if(!CUR)CUR=blankNote();
+  if(!CUR.scripture_refs)CUR.scripture_refs=[];
+  /* If the panes on screen were rendered from this same note object, capture whatever
+     was typed before we rebuild the DOM — otherwise clicking a filter chip or collapsing
+     a panel mid-sentence threw the text away. Identity check matters: after openNote()
+     CUR is a different object and the stale DOM must NOT be copied into it. */
+  if(PANE_OWNER===CUR)syncPanes();
+  saveLibState();
+  const host=$('view-notes');if(!host)return;
+  const _lr=$('lib-results');const _scroll=_lr?_lr.scrollTop:0;   // survive the rebuild
+  host.innerHTML=
+    toolRowHtml()+
+    '<div class="notesbody">'+
+      (UI.listHidden?'<button class="strip l" onclick="toggleList()" title="Show the results list"><div class="ico">»</div><span class="n" id="strip-count"></span><span class="vlabel">Results</span></button>':listColHtml())+
+      '<div class="detail">'+(UI.detHidden?factsStripHtml():'')+panesHtml()+'</div>'+
+      (UI.detHidden?'<button class="strip r" onclick="toggleDet()" title="Show note details"><div class="ico">«</div><span class="vlabel">Details</span></button>':detPanelHtml())+
+    '</div>';
+  // panes
+  $('rte-q').innerHTML=CUR.quote_html||'';
+  $('rte-n').innerHTML=CUR.note_html||'';
+  ['q','n'].forEach(k=>{const el=$('rte-'+k);if(!el)return;
+    el.addEventListener('input',()=>{dirty=true;scheduleSave()});
+    el.addEventListener('paste',sanitizePaste);
+    el.addEventListener('keydown',rteShortcut)});
+  PANE_OWNER=CUR;
+  renderNotesList(_scroll);
+  if(!UI.detHidden){renderPurposeFields();initScriptureSelects();
+    const ti=$('tag-in');if(ti)makeAutocomplete(ti,allTags,{onEnter:v=>{ti.value=v;addTagFromInput()}})}
+  const lt=$('lib-tag-in');if(lt)makeAutocomplete(lt,allTags,{onEnter:v=>{libTag(v);lt.value=''}});
+  updateSaveStatus();
+}
+
+function toolRowHtml(){
+  const rs=libResults(),i=curIndex(rs),fc=activeFilterCount();
+  return `<div class="popwrap"><div class="toolrow">
+    <button class="btn sm gho backbtn" onclick="showList()">‹ List</button>
+    <span class="pager" title="Step through results — arrow keys, or Option+arrow while typing">
+      <button onclick="stepNote(-1)" title="Previous result (← or ⌥←)">‹</button>
+      <span class="pos">${i>=0?(i+1):'–'} / ${rs.length}</span>
+      <button onclick="stepNote(1)" title="Next result (→ or ⌥→)">›</button>
+    </span>
+    <input id="lib-q" placeholder="Search…" value="${esc(LIB.q)}" style="flex:1;min-width:90px;max-width:280px" oninput="LIB.q=this.value;renderNotesList();refreshPager()">
+    <button class="btn sm sec" onclick="toggleFilters()">Filters${fc?' <span class="badge">'+fc+'</span>':''}</button>
+    ${fc?'<button class="btn sm gho" onclick="clearLib()">Clear</button>':''}
+    <select onchange="LIB.sort=this.value;renderNotes()" title="Sort order">
+      ${[['new','newest first'],['old','oldest first'],['author','sort: author'],['title','sort: title'],['year','sort: pub date'],['page','sort: work + page'],['pagenum','sort: page number']].map(([v,l])=>`<option value="${v}" ${LIB.sort===v?'selected':''}>${l}</option>`).join('')}
+    </select>
+    <span style="flex:1"></span>
+    <button class="btn sm ${(UI.listHidden&&UI.detHidden)?'':'gho'}" onclick="toggleFocus()" title="Collapse both side panels">${(UI.listHidden&&UI.detHidden)?'Exit focus':'Focus'}</button>
+  </div>${filtersPopHtml()}</div>`;
+}
+
+function filtersPopHtml(){
+  const counts=tagCounts(),pinned=(DB.settings.pinned_tags||[]);
+  const top=[...pinned,...Object.keys(counts).filter(t=>!pinned.includes(t)).sort((a,b)=>counts[b]-counts[a]).slice(0,10)];
+  const ff=filterableFields().filter(f=>!LIB.purpose||f.purpose===LIB.purpose);
+  return `<div class="fpop${FILTERS_OPEN?' open':''}" id="filters-pop">
+    <div class="row" style="margin-bottom:4px"><b class="small">Filters</b><span style="flex:1"></span>
+      <button class="btn sm gho" onclick="clearLib()">Clear all</button>
+      <button class="btn sm sec" onclick="toggleFilters()">Done</button></div>
+    <details class="grp" open><summary>Search in</summary><div class="gi">
+      <span class="chip ${LIB.inQ?'on':''}" onclick="LIB.inQ=!LIB.inQ;renderNotes()">quotes</span>
+      <span class="chip ${LIB.inN?'on':''}" onclick="LIB.inN=!LIB.inN;renderNotes()">notes</span>
+      <span class="chip ${LIB.inT?'on':''}" onclick="LIB.inT=!LIB.inT;renderNotes()">tags</span>
+    </div></details>
+    <details class="grp" ${LIB.tags.length?'open':''}><summary>Tags${LIB.tags.length?' <span class="badge">'+LIB.tags.length+'</span>':''}</summary><div class="gi">
+      ${top.map(t=>`<span class="chip ${LIB.tags.includes(t)?'on':''}" onclick="libTag('${esc(t).replace(/'/g,"\\'")}')">${esc(t)}</span>`).join('')}
+      <input id="lib-tag-in" placeholder="+ tag filter" style="width:120px" autocomplete="off">
+    </div></details>
+    <details class="grp" ${LIB.purpose?'open':''}><summary>Purpose${LIB.purpose?' <span class="badge">1</span>':''}</summary><div class="gi">
+      <span class="chip ${!LIB.purpose?'on':''}" onclick="LIB.purpose='';renderNotes()">any</span>
+      ${DB.purposes.map(p=>`<span class="chip ${LIB.purpose===p.name?'on':''}" onclick="LIB.purpose='${esc(p.name).replace(/'/g,"\\'")}';renderNotes()">${esc(p.name)}</span>`).join('')}
+      ${ff.map(f=>{const pkey=f.purpose+'|'+f.key,vals=fieldValues(f.purpose,f.key);
+        if(!vals.length)return'';
+        return `<div style="width:100%;margin-top:8px"><div class="small muted" style="margin-bottom:4px">${esc(f.purpose)} · ${esc(f.label)}</div>
+          ${vals.map(v=>`<span class="chip ${(LIB.pf[pkey]||[]).includes(v)?'on':''}" onclick="togglePF('${esc(pkey).replace(/'/g,"\\'")}','${esc(v).replace(/'/g,"\\'")}')">${esc(v)}</span>`).join('')}</div>`}).join('')}
+      ${!LIB.purpose?'<div class="small muted" style="width:100%;margin-top:6px">Purpose-specific filters appear once you pick a purpose.</div>':''}
+    </div></details>
+    <details class="grp" ${LIB.scripture?'open':''}><summary>Scripture${LIB.scripture?' <span class="badge">1</span>':''}</summary><div class="gi">
+      <input placeholder="e.g. Romans 8 or John 3:16" value="${esc(LIB.scripture)}" style="flex:1" oninput="LIB.scripture=this.value;renderNotesList();refreshPager()">
+    </div></details>
+    <details class="grp" ${(LIB.person||LIB.work)?'open':''}><summary>Author &amp; work</summary><div class="gi">
+      <select onchange="setLibPerson(this.value)"><option value="">any author</option>
+        ${DB.people.map(p=>`<option value="${p.id}" ${LIB.person===p.id?'selected':''}>${esc(invertName(p))}</option>`).join('')}</select>
+      <select onchange="LIB.work=this.value;renderNotes()"><option value="">${LIB.person?'any work by this author':'any work'}</option>
+        ${(LIB.person?DB.works.filter(w=>DB.wc.some(c=>c.work_id===w.id&&c.person_id===LIB.person)):DB.works)
+          .map(w=>`<option value="${w.id}" ${LIB.work===w.id?'selected':''}>${esc(w.title)}</option>`).join('')}</select>
+    </div></details>
+    <details class="grp"><summary>Saved views</summary><div class="gi">
+      <select id="lib-views" onchange="applyView(this.value)"><option value="">saved views…</option>
+        ${(DB.settings.saved_filters||[]).map(v=>`<option value="${v.id}">${esc(v.name)}</option>`).join('')}</select>
+      <button class="btn sm sec" onclick="saveView()">💾 Save this view</button>
+      <button class="btn sm gho" onclick="deleteView()">Delete view</button>
+    </div></details>
+  </div>`;
+}
+
+function listColHtml(){
+  return `<div class="listcol">
+    <div class="listhead">
+      <span class="small muted" id="lib-count"></span>
+      <span style="flex:1"></span>
+      <button class="btn sm ${LIB.selMode?'':'gho'}" onclick="toggleSelMode()">${LIB.selMode?'Done':'☑'}</button>
+      <button class="btn sm gho" onclick="toggleList()" title="Collapse the list">«</button>
+    </div>
+    ${LIB.selMode?'<div class="listhead" id="bulk-bar" style="flex-wrap:wrap">'+bulkBarHtml()+'</div>':''}
+    <div class="listscroll" id="lib-results"></div>
+  </div>`;
+}
+
+function renderNotesList(keepScroll){
+  const rs=libResults();
+  const _el=$('lib-results');
+  const _pos=(keepScroll!==undefined)?keepScroll:(_el?_el.scrollTop:0);
+  const host=$('lib-results');
+  const cnt=$('lib-count');if(cnt)cnt.innerHTML=`${DB.notes.length} notes · <b>${rs.length} shown</b>`;
+  const sc=$('strip-count');if(sc)sc.textContent=rs.length;
+  if(!host)return;
+  let out='',lastW='\u0000';
+  rs.slice(0,400).forEach(n=>{
+    const w=W(n.work_id);
+    const key=w?w.id:'none';
+    if(key!==lastW){
+      const a=w?(contribs(w.id,'author')[0]||contribs(w.id,'editor')[0]):null;
+      out+=`<div class="groupbar">${w?esc((a?a.name.split(/\s+/).pop()+' · ':'')+w.title):'No work'}</div>`;
+      lastW=key;
+    }
+    const loc=locatorStr(n.locators)||'—';
+    out+=`<button class="nrow ${CUR&&n.id===CUR.id?'on':''}" onclick="openNote('${n.id}')">
+      <div class="r1">${LIB.selMode?`<input type="checkbox" ${LIB.sel.has(n.id)?'checked':''} onclick="event.stopPropagation();selNote('${n.id}',this.checked)" style="width:16px;height:16px;margin:0 4px 0 0">`:''}<b>${esc(loc)}</b>${(n.purposes||[]).map(p=>'<span>· '+esc(p)+'</span>').join('')}</div>
+      <div class="r2">${hl(esc(stripHtml(n.quote_html||n.note_html||'(empty)')).slice(0,220))}</div>
+      <div class="r3">${(n.scripture_refs||[]).slice(0,3).map(r=>`<span class="tg">📖 ${esc(refLabel(r))}</span>`).join('')}${(n.tags||[]).slice(0,2).map(t=>`<span class="tg">${esc(t)}</span>`).join('')}${(n.tags||[]).length>2?`<span class="tg">+${n.tags.length-2}</span>`:''}</div>
+    </button>`;
+  });
+  host.innerHTML=out||'<p class="small muted" style="padding:14px">No notes match these filters.</p>';
+  if(rs.length>400)host.innerHTML+='<p class="small muted" style="padding:10px 14px">Showing first 400.</p>';
+  host.scrollTop=_pos;   // selecting a row must not scroll the list back to the top
+}
+
+function panesHtml(){
+  return `<div class="v2panes">
+    <div class="v2pane"><div class="pane-head"><span class="ttl">Quote</span>${rteBar('q')}</div>
+      <div class="rte" id="rte-q" contenteditable="true" data-ph="Paste or type the quotation…"></div></div>
+    <div class="v2pane"><div class="pane-head"><span class="ttl">My notes</span>${rteBar('n')}</div>
+      <div class="rte" id="rte-n" contenteditable="true" data-ph="Your thoughts on this passage…" style="font-family:var(--nfont);font-size:var(--nsize)"></div></div>
+  </div>`;
+}
+
+function factsStripHtml(){
+  const w=W(CUR.work_id);
+  const c=w?citeWork(w,{form:'note',locators:CUR.locators,chapter_title:CUR.chapter_title,chapter_author:CUR.chapter_author}):null;
+  return `<div class="facts-strip">
+    <span class="fcite">${c?c.text:'No work selected'}</span>
+    ${(CUR.locators||[]).map(l=>`<span class="fact acc">${esc(LOC_TYPES[l.type]||l.type)} ${esc(l.value)}</span>`).join('')}
+    ${(CUR.purposes||[]).map(p=>`<span class="fact acc">${esc(p)}</span>`).join('')}
+    ${(CUR.scripture_refs||[]).slice(0,3).map(r=>`<span class="fact">📖 ${esc(refLabel(r))}</span>`).join('')}
+    ${(CUR.tags||[]).length?`<span class="fact">${CUR.tags.length} tags</span>`:''}
+  </div>`;
+}
+
+function detPanelHtml(){
+  const w=W(CUR.work_id);
+  const selAuthor=w?(contribs(w.id,'author')[0]||contribs(w.id,'editor')[0]||{}).id:CUR._authorSel;
+  const authorOpts=DB.people.map(p=>`<option value="${p.id}" ${p.id===selAuthor?'selected':''}>${esc(invertName(p))}</option>`).join('');
+  const worksOf=selAuthor?DB.works.filter(x=>DB.wc.some(c=>c.work_id===x.id&&c.person_id===selAuthor)):DB.works;
+  const workOpts=worksOf.map(x=>`<option value="${x.id}" ${x.id===CUR.work_id?'selected':''}>${esc(x.title)}</option>`).join('');
+  const c=w?citeWork(w,{form:'note',locators:CUR.locators,chapter_title:CUR.chapter_title,chapter_author:CUR.chapter_author}):{html:'<span class="muted">No work selected.</span>'};
+  const surrogate=w&&w.source_status!=='published';
+  return `<div class="dpanel">
+    <div class="dhd"><span class="t">Note details</span><span style="flex:1"></span>
+      <button class="btn sm gho" onclick="toggleDet()" title="Collapse">»</button></div>
+    <div class="dsc">
+      <div class="blk">
+        <div class="bh"><span class="lbl">Citation</span>
+          <button class="add" onclick="togCls('ed-citation')" title="Change author or work">✎</button></div>
+        <div class="dcite" id="cite-preview">${c.html}${surrogate?' <span class="badge">'+esc(w.source_status)+'</span>':''}</div>
+        <div class="vals" style="margin-top:8px">
+          <button class="btn sm gho" onclick="copyCur('quote')">Quote</button>
+          <button class="btn sm gho" onclick="copyCur('quote_cite')">Q+cite</button>
+          <button class="btn sm gho" onclick="copyCur('cite')">Cite</button>
+          <button class="btn sm gho" onclick="copyCur('bib')">Biblio</button>
+        </div>
+        <div class="edit" id="ed-citation">
+          <label>Author</label>
+          <select id="ed-author" style="width:100%" onchange="pickAuthor(this.value)"><option value="">— all authors —</option>${authorOpts}</select>
+          <label>Work</label>
+          <select id="ed-work" style="width:100%" onchange="pickWork(this.value)"><option value="">— select work —</option>${workOpts}</select>
+          <div class="row" style="margin-top:7px">
+            <button class="btn sm sec" onclick="openWorkModal(null)">+ New work</button>
+            ${w?`<button class="btn sm sec" onclick="openWorkModal('${w.id}')">Edit work</button>`:''}</div>
+          <label>Chapter (edited volumes)</label>
+          <input placeholder="Chapter title" value="${esc(CUR.chapter_title)}" onchange="CUR.chapter_title=this.value;refreshCite()" style="width:100%">
+          <input placeholder="Chapter author" value="${esc(CUR.chapter_author)}" onchange="CUR.chapter_author=this.value;refreshCite()" style="width:100%;margin-top:5px">
+        </div>
+      </div>
+      <div class="blk">
+        <div class="bh"><span class="lbl">Locators</span><button class="add" onclick="togCls('ed-loc')" title="Add">+</button></div>
+        <div class="vals" id="loc-chips">${(CUR.locators||[]).map(locChip).join('')||'<span class="small muted">none</span>'}</div>
+        <div class="edit" id="ed-loc">
+          <div class="row">
+            <select id="loc-type">${Object.entries(LOC_TYPES).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select>
+            <input id="loc-val" placeholder="value" style="width:90px" onkeydown="if(event.key==='Enter'){event.preventDefault();addLoc()}">
+            <button class="btn sm sec" onclick="addLoc()">Add</button></div>
+        </div>
+      </div>
+      <div class="blk">
+        <div class="bh"><span class="lbl">Purpose</span><button class="add" onclick="togCls('ed-purp')" title="Change">✎</button></div>
+        <div class="vals">${(CUR.purposes||[]).map(p=>`<span class="chip on">${esc(p)}</span>`).join('')||'<span class="small muted">none</span>'}</div>
+        <div class="edit" id="ed-purp"><div class="vals">
+          ${DB.purposes.map(p=>`<span class="chip ${CUR.purposes.includes(p.name)?'on':''}" onclick="togglePurpose('${esc(p.name).replace(/'/g,"\\'")}')">${esc(p.name)}</span>`).join('')||'<span class="small muted">none defined</span>'}
+        </div></div>
+        <div id="purpose-fields"></div>
+      </div>
+      <div class="blk">
+        <div class="bh"><span class="lbl">Scripture</span><button class="add" onclick="togCls('ed-scr')" title="Add">+</button></div>
+        <div class="vals" id="scr-chips">${(CUR.scripture_refs||[]).map(scriptureChip).join('')||'<span class="small muted">none</span>'}</div>
+        <div class="edit" id="ed-scr">
+          <div class="row" style="flex-wrap:wrap">
+            <select id="scr-test" onchange="scrTestChange()"><option value="OT">OT</option><option value="NT">NT</option><option value="AP">Apoc.</option></select>
+            <select id="scr-book" onchange="scrBookChange()"></select>
+            <select id="scr-ch"></select>
+            <input id="scr-vs" placeholder="v" style="width:48px" onkeydown="if(event.key==='Enter'){event.preventDefault();addScriptureRef()}">
+            <input id="scr-ve" placeholder="–v" style="width:52px" onkeydown="if(event.key==='Enter'){event.preventDefault();addScriptureRef()}">
+            <button class="btn sm sec" onclick="addScriptureRef()">Add</button></div>
+          <div class="row" style="margin-top:5px">
+            <input id="scr-text" placeholder="or type e.g. John 3:16-21" style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();addScriptureRefFromText()}">
+            <button class="btn sm sec" onclick="addScriptureRefFromText()">Add</button></div>
+        </div>
+      </div>
+      <div class="blk">
+        <div class="bh"><span class="lbl">Tags</span>${(CUR.tags||[]).length?`<span class="badge gray">${CUR.tags.length}</span>`:''}<button class="add" onclick="togCls('ed-tags')" title="Add">+</button></div>
+        <div class="vals" id="cur-tags">${CUR.tags.map(tagChip).join('')||'<span class="small muted">none</span>'}</div>
+        <div class="edit" id="ed-tags">
+          <div class="vals" id="pin-tags">${(DB.settings.pinned_tags||[]).map(pinChip).join('')}</div>
+          <input id="tag-in" placeholder="add tag… (Enter)" style="width:100%;margin-top:6px" autocomplete="off">
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ---- panel collapse / focus / paging ---- */
+function toggleList(){UI.listHidden=!UI.listHidden;saveUI();renderNotes()}
+function toggleDet(){UI.detHidden=!UI.detHidden;saveUI();renderNotes()}
+function toggleFocus(){const f=UI.listHidden&&UI.detHidden;UI.listHidden=!f;UI.detHidden=!f;saveUI();renderNotes()}
+function showList(){document.body.classList.remove('stack-detail');document.body.classList.add('stack-list')}
+function showDetail(){document.body.classList.remove('stack-list');document.body.classList.add('stack-detail')}
+function refreshPager(){const rs=libResults(),i=curIndex(rs);const el=document.querySelector('.pager .pos');
+  if(el)el.textContent=(i>=0?(i+1):'–')+' / '+rs.length}
+async function openNote(id){await flushSave();const n=DB.notes.find(x=>x.id===id);if(!n)return;
+  CUR=JSON.parse(JSON.stringify(n));showDetail();renderNotes()}
+async function stepNote(d){
+  const rs=libResults();if(!rs.length)return;
+  let i=curIndex(rs);
+  i=(i<0)?(d>0?0:rs.length-1):((i+d+rs.length)%rs.length);
+  await openNote(rs[i].id);
+}
+async function newNoteSameBook(){
+  if(!CUR||!CUR.work_id){toast('Select a work first');return}
+  const wid=CUR.work_id,a=CUR._authorSel,p=[...(CUR.purposes||[])];
+  await flushSave();CUR=blankNote();CUR.work_id=wid;CUR._authorSel=a;CUR.purposes=p;
+  showDetail();renderNotes();
+}
+async function duplicateNote(){
+  if(!CUR)return;await flushSave();
+  const c=JSON.parse(JSON.stringify(CUR));c.id=null;c.date_added=new Date().toISOString();
+  CUR=c;showDetail();renderNotes();toast('Duplicated — not yet saved');
+}
+
+/* ---- save status: autosave is the mechanism, this is the honest report of it ---- */
+let SAVE_STATE='saved';
+function updateSaveStatus(){
+  const el=$('save-status');if(!el)return;
+  el.className='savestate'+(SAVE_STATE==='error'?' warn':'');
+  el.textContent=SAVE_STATE==='saving'?'Saving…':SAVE_STATE==='dirty'?'Unsaved…':
+    SAVE_STATE==='error'?'⚠ Not saved — tap Save now':'Saved ✓';
+}
+function setSaveState(s){SAVE_STATE=s;updateSaveStatus()}
+
+/* ---- keyboard paging ---- */
+addEventListener('keydown',e=>{
+  const typing=/^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName||'')||e.target.isContentEditable;
+  if(e.altKey&&!e.metaKey&&!e.ctrlKey){
+    if(e.key==='ArrowDown'||e.key==='ArrowRight'){e.preventDefault();stepNote(1);return}
+    if(e.key==='ArrowUp'||e.key==='ArrowLeft'){e.preventDefault();stepNote(-1);return}
+  }
+  if(typing)return;
+  if(e.altKey||e.metaKey||e.ctrlKey||e.shiftKey)return;
+  if(e.key==='ArrowDown'||e.key==='ArrowRight'){e.preventDefault();stepNote(1)}
+  else if(e.key==='ArrowUp'||e.key==='ArrowLeft'){e.preventDefault();stepNote(-1)}
+});
+/* click-away closes popovers */
+addEventListener('click',e=>{
+  if(!e.target.closest)return;
+  if(!e.target.closest('.menuwrap'))  {const m=$('note-menu');if(m)m.classList.remove('open')}
+  if(!e.target.closest('.popwrap'))   {const m=$('filters-pop');if(m)m.classList.remove('open');FILTERS_OPEN=false}
+},true);
+
 </script>
 
 <script>
@@ -1353,9 +1763,13 @@ function libSnapshot(){return{q:LIB.q,inQ:LIB.inQ,inN:LIB.inN,inT:LIB.inT,tags:[
 function applyView(id){if(!id)return;const v=(DB.settings.saved_filters||[]).find(x=>x.id===id);if(!v)return;Object.assign(LIB,JSON.parse(JSON.stringify(v.filters)));if(!LIB.pf)LIB.pf={};LIB.sel=new Set();renderLibrary()}
 function saveView(){const name=prompt('Name this view (current search, filters, and sort will be saved):');if(!name)return;DB.settings.saved_filters=DB.settings.saved_filters||[];DB.settings.saved_filters.push({id:'v_'+Date.now().toString(36),name:name.trim(),filters:libSnapshot()});saveSettings();renderLibrary();toast('View saved')}
 function deleteView(){const el=$('lib-views');if(!el||!el.value){toast('Choose a saved view first');return}const v=(DB.settings.saved_filters||[]).find(x=>x.id===el.value);if(!confirm(`Delete saved view "${v?v.name:''}"?`))return;DB.settings.saved_filters=DB.settings.saved_filters.filter(x=>x.id!==el.value);saveSettings();renderLibrary()}
-function gotoWorkNotes(wid){LIB.q='';LIB.tags=[];LIB.purpose='';LIB.person='';LIB.scripture='';LIB.work=wid;LIB.sort='page';LIB.selMode=false;LIB.sel=new Set();LIB.pf={};nav('library')}
+function gotoWorkNotes(wid){LIB.q='';LIB.tags=[];LIB.purpose='';LIB.person='';LIB.scripture='';LIB.work=wid;LIB.sort='page';LIB.selMode=false;LIB.sel=new Set();LIB.pf={};showList();nav('notes')}
 function sortNotes(arr){
   const st=LIB.sort||'new';
+  /* Page sort considers ONLY page-type locators, ignoring chapter/kindle/EEBO alongside them.
+     Every number in every page locator is collected and the lowest wins, so a range ("193-195")
+     sorts at 193 and a record with two page locators sorts by its earliest. The old version
+     stripped non-digits from the whole string, turning "193-195" into 193195. */
   const firstPage=n=>{
     const nums=(n.locators||[]).filter(x=>x.type==='page')
       .flatMap(x=>String(x.value).match(/\d+(?:\.\d+)?/g)||[])
@@ -1430,63 +1844,8 @@ async function bulkPurpose(add){
   }
   toast(add?`Purpose added to ${c} notes`:`Purpose removed from ${c} notes`);renderLibrary();
 }
-function renderLibrary(){
-  saveLibState();
-  const counts=tagCounts();
-  const pinned=(DB.settings.pinned_tags||[]);
-  const topTags=[...pinned,...Object.keys(counts).filter(t=>!pinned.includes(t)).sort((a,b)=>counts[b]-counts[a]).slice(0,8)];
-  const results=libResults();
-  $('view-library').innerHTML=`
-  <div id="ribbon">
-    <div class="rib-row">
-      <input id="lib-q" placeholder="Search…" value="${esc(LIB.q)}" style="flex:1;min-width:160px" oninput="LIB.q=this.value;renderLibResults()">
-      <span class="chip ${LIB.inQ?'on':''}" onclick="LIB.inQ=!LIB.inQ;renderLibrary()">in quotes</span>
-      <span class="chip ${LIB.inN?'on':''}" onclick="LIB.inN=!LIB.inN;renderLibrary()">in notes</span>
-      <span class="chip ${LIB.inT?'on':''}" onclick="LIB.inT=!LIB.inT;renderLibrary()">in tags</span>
-      <select onchange="LIB.purpose=this.value;renderLibrary()">
-        <option value="">any purpose</option>
-        ${DB.purposes.map(p=>`<option ${LIB.purpose===p.name?'selected':''}>${esc(p.name)}</option>`).join('')}
-      </select>
-      <select onchange="LIB.person=this.value;renderLibrary()">
-        <option value="">any author</option>
-        ${DB.people.map(p=>`<option value="${p.id}" ${LIB.person===p.id?'selected':''}>${esc(invertName(p))}</option>`).join('')}
-      </select>
-      <select onchange="LIB.work=this.value;renderLibrary()">
-        <option value="">any work</option>
-        ${DB.works.map(w=>`<option value="${w.id}" ${LIB.work===w.id?'selected':''}>${esc(w.title)}</option>`).join('')}
-      </select>
-      <input id="lib-scr" placeholder="Scripture (e.g. John 3:16)" value="${esc(LIB.scripture)}" style="width:180px" oninput="LIB.scripture=this.value;renderLibResults()">
-      <select onchange="LIB.sort=this.value;renderLibrary()" title="Sort order">
-        ${[['new','newest first'],['old','oldest first'],['author','sort: author'],['title','sort: title'],['year','sort: pub date'],['page','sort: work + page'],['pagenum','sort: page number']].map(([v,l])=>`<option value="${v}" ${LIB.sort===v?'selected':''}>${l}</option>`).join('')}
-      </select>
-      <button class="btn sm ${LIB.selMode?'':'sec'}" onclick="toggleSelMode()">${LIB.selMode?'Done selecting':'☑ Select'}</button>
-    </div>
-    ${LIB.selMode?'<div class="rib-row" id="bulk-bar">'+bulkBarHtml()+'</div>':''}
-    <div class="rib-row"><span class="small muted" style="align-self:center">Filter tags (AND):</span>
-      ${topTags.map(t=>`<span class="chip ${LIB.tags.includes(t)?'on':''}" onclick="libTag('${esc(t).replace(/'/g,"\\'")}')">${esc(t)}</span>`).join('')}
-      <input id="lib-tag-in" placeholder="+ tag filter" style="width:110px">
-      ${LIB.tags.length||LIB.q||LIB.purpose||LIB.person||LIB.work||LIB.scripture||Object.keys(LIB.pf||{}).length?'<button class="btn sm sec" onclick="clearLib()">Clear filters</button>':''}
-      <span style="flex:1"></span>
-      <select id="lib-views" onchange="applyView(this.value)">
-        <option value="">saved views…</option>
-        ${(DB.settings.saved_filters||[]).map(v=>`<option value="${v.id}">${esc(v.name)}</option>`).join('')}
-      </select>
-      <button class="btn sm sec" onclick="saveView()" title="Save current filters as a named view">💾 Save view</button>
-      <button class="btn sm sec" onclick="deleteView()" title="Delete the selected saved view">✕</button>
-    </div>
-    ${filterableFields().map(f=>{
-      const pkey=f.purpose+'|'+f.key;
-      const vals=fieldValues(f.purpose,f.key);
-      if(!vals.length)return'';
-      return `<div class="rib-row"><span class="small muted" style="align-self:center;min-width:130px">${esc(f.purpose)} · ${esc(f.label)}:</span>
-        ${vals.map(v=>`<span class="chip ${(LIB.pf[pkey]||[]).includes(v)?'on':''}" onclick="togglePF('${esc(pkey).replace(/'/g,"\\'")}','${esc(v).replace(/'/g,"\\'")}')">${esc(v)}</span>`).join('')}</div>`;
-    }).join('')}
-  </div>
-  <div id="lib-results"></div>`;
-  renderLibResults();
-  const lti=$('lib-tag-in');if(lti)makeAutocomplete(lti,allTags,{onEnter:v=>{libTag(v);lti.value=''}});
-  wireBulkBarAutocomplete();
-}
+/* renderLibraryOld removed — superseded by renderNotes() */
+
 function libTag(t){LIB.tags.includes(t)?LIB.tags=LIB.tags.filter(x=>x!==t):LIB.tags.push(t);renderLibrary()}
 function clearLib(){LIB={q:'',inQ:true,inN:true,inT:true,tags:[],purpose:'',work:'',person:'',scripture:'',sort:LIB.sort,selMode:false,sel:new Set(),pf:{}};renderLibrary()}
 function filterableFields(){
@@ -1546,31 +1905,8 @@ function hl(html){
   });
   return out;
 }
-function renderLibResults(){
-  const rs=libResults();
-  const host=$('lib-results');if(!host)return;
-  host.innerHTML=`<p class="small muted">${rs.length} note${rs.length===1?'':'s'}</p>`+
-  rs.slice(0,200).map(n=>{
-    const w=W(n.work_id);
-    const c=citeNoteObj(n,'note');
-    const surrogate=w&&w.source_status!=='published';
-    return `<div class="note-card">
-      <div class="cite">${c.html||'<span class="muted">no work</span>'} ${surrogate?'<span class="badge">cite original</span>':''}</div>
-      ${n.quote_html?'<div class="q">'+hl(n.quote_html)+'</div>':''}
-      ${n.note_html?'<div class="n">'+hl(n.note_html)+'</div>':''}
-      <div class="meta">
-        ${LIB.selMode?`<input type="checkbox" ${LIB.sel.has(n.id)?'checked':''} onclick="selNote('${n.id}',this.checked)" style="width:18px;height:18px;margin:0">`:''}
-        ${(n.purposes||[]).map(p=>'<span class="badge gray">'+esc(p)+'</span>').join('')}
-        ${(n.scripture_refs||[]).map(r=>'<span class="badge gray">📖 '+esc(refLabel(r))+'</span>').join('')}
-        ${(n.tags||[]).map(t=>`<span class="chip" onclick="libTag('${esc(t).replace(/'/g,"\\'")}')">${esc(t)}</span>`).join('')}
-        <span style="flex:1"></span>
-        <button class="btn sm sec" onclick="copyNote(DB.notes.find(x=>x.id==='${n.id}'),'quote')">Quote</button>
-        <button class="btn sm sec" onclick="copyNote(DB.notes.find(x=>x.id==='${n.id}'),'quote_cite')">Q + cite</button>
-        <button class="btn sm sec" onclick="copyNote(DB.notes.find(x=>x.id==='${n.id}'),'cite')">Cite</button>
-        <button class="btn sm" onclick="editNote('${n.id}')">Edit</button>
-      </div></div>`;
-  }).join('')+(rs.length>200?'<p class="muted small">Showing first 200 — refine your search.</p>':'');
-}
+/* renderLibResultsOld removed — superseded by renderNotes() */
+
 
 /* ================= works & people views ================= */
 let WORKS_SORT='title';
@@ -1738,7 +2074,7 @@ function renderSettings(){
   </div>
   <div class="card set-section">
     <h3>Account</h3>
-    <p class="small muted">${esc((USER&&USER.email)||'')} · Notes on Books v1.13</p>
+    <p class="small muted">${esc((USER&&USER.email)||'')} · Notes on Books v2.0</p>
     <button class="btn sec" onclick="sb.auth.signOut().then(()=>location.reload())">Sign out</button>
   </div>`;
   const pinIn=$('pin-in');if(pinIn)makeAutocomplete(pinIn,allTags,{onEnter:v=>{pinIn.value=v;pin(v)}});
