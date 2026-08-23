@@ -84,7 +84,7 @@ body.v2 #view-works,body.v2 #view-people,body.v2 #view-settings{
 
 /* results list */
 .listcol{flex:0 0 var(--listw,330px);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0;background:var(--panel)}
-.listhead{padding:8px 11px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px;flex:0 0 auto}
+.listhead{padding:8px 11px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:6px;flex:0 0 auto;flex-wrap:wrap}
 .listscroll{overflow-y:auto;-webkit-overflow-scrolling:touch;flex:1}
 .nrow{padding:11px 13px;border-bottom:1px solid var(--line);cursor:pointer;display:block;width:100%;text-align:left;background:none;border-left:3px solid transparent;font-family:var(--sans)}
 .nrow:hover{background:#fbf9f6}
@@ -824,6 +824,55 @@ async function copyRich(html,text){
     const ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();toast('Copied');
   }
 }
+/* ---- Chicago short form: "Owen, Overcoming Sin, 204." Used for the 2nd and later
+   quotations from the same work within one export, per Chicago's shortened-note convention. ---- */
+function shortTitle(t){
+  let s=String(t||'').split(':')[0].trim();
+  const w=s.split(/\s+/);
+  if(w.length>4){const st=/^(the|a|an)$/i.test(w[0])?1:0;s=w.slice(st,st+4).join(' ')}
+  return s;
+}
+function shortCiteObj(n){
+  const w=W(n.work_id);
+  if(!w)return{html:'',text:''};
+  let ps=contribs(w.id,'author'); if(!ps.length)ps=contribs(w.id,'editor');
+  const last=p=>String(p.name||'').trim().split(/\s+/).pop();
+  const who = !ps.length?'' : ps.length===1?last(ps[0])
+            : ps.length===2?(last(ps[0])+' and '+last(ps[1])) : (last(ps[0])+' et al.');
+  const t=shortTitle(w.title), locs=locatorStr(n.locators);
+  return{html:(who?esc(who)+', ':'')+'<i>'+esc(t)+'</i>'+(locs?', '+esc(locs):'')+'.',
+         text:(who?who+', ':'')+t+(locs?', '+locs:'')+'.'};
+}
+/* Selection drives the export; with nothing ticked it falls back to the open note,
+   so a one-off copy doesn't require entering select mode. */
+function selectedNotes(){
+  const rs=libResults();                       // already in the list's current sort order
+  if(LIB.sel.size)return rs.filter(n=>LIB.sel.has(n.id));
+  return (CUR&&CUR.id)?[DB.notes.find(n=>n.id===CUR.id)].filter(Boolean):[];
+}
+async function exportNotes(mode){              // 'quote' = quote+citation, 'qnote' = + your note
+  const list=selectedNotes();
+  if(!list.length){toast('Tick some results first, or open a note');return}
+  const seen=new Set(); const H=[],T=[]; let surrogate=false;
+  list.forEach(n=>{
+    const w=W(n.work_id);
+    if(w&&w.source_status!=='published')surrogate=true;
+    const key=w?w.id:'__none';
+    const firstFromWork=!seen.has(key); seen.add(key);
+    const c=firstFromWork?citeNoteObj(n,'note'):shortCiteObj(n);
+    const qInner=(n.quote_html||'').replace(/^<p>|<\/p>$/g,'');
+    let h='<p>\u201c'+qInner+'\u201d '+c.html+'</p>';
+    let t='\u201c'+stripHtml(n.quote_html||'')+'\u201d '+c.text;
+    if(mode==='qnote'){
+      const nh=n.note_html||'';
+      h+= nh || '<p><br></p>';                 // empty note still leaves its blank line
+      t+='\n\n'+stripHtml(nh);
+    }
+    H.push(h);T.push(t);
+  });
+  await copyRich(H.join(''),T.join('\n\n'));
+  toast('Copied '+list.length+' note'+(list.length===1?'':'s')+(surrogate?' \u2014 \u26a0\ufe0f includes a surrogate source':''));
+}
 function copyNote(n,mode){ // mode: quote | quote_cite | cite | bib
   const c=citeNoteObj(n,'note');
   const w=W(n.work_id);
@@ -1556,8 +1605,15 @@ function listColHtml(){
     <div class="listhead">
       <span class="small muted" id="lib-count"></span>
       <span style="flex:1"></span>
-      <button class="btn sm ${LIB.selMode?'':'gho'}" onclick="toggleSelMode()">${LIB.selMode?'Done':'☑'}</button>
+      <button class="btn sm ${LIB.selMode?'':'gho'}" onclick="toggleSelMode()" title="Select multiple results">${LIB.selMode?'Done':'☑'}</button>
       <button class="btn sm gho" onclick="toggleList()" title="Collapse the list">«</button>
+    </div>
+    <div class="listhead" style="border-top:none">
+      <button class="btn sm sec" onclick="exportNotes('quote')" title="Copy quote + citation">Quote${LIB.sel.size?' ('+LIB.sel.size+')':''}</button>
+      <button class="btn sm sec" onclick="exportNotes('qnote')" title="Copy quote + citation + your note">Q+Note${LIB.sel.size?' ('+LIB.sel.size+')':''}</button>
+      ${LIB.selMode?`<span style="flex:1"></span>
+      <button class="btn sm gho" onclick="selAll()">All</button>
+      <button class="btn sm gho" onclick="selNone()">None</button>`:''}
     </div>
     ${LIB.selMode?'<div class="listhead" id="bulk-bar" style="flex-wrap:wrap">'+bulkBarHtml()+'</div>':''}
     <div class="listscroll" id="lib-results"></div>
@@ -1631,8 +1687,6 @@ function detPanelHtml(){
           <button class="add" onclick="togCls('ed-citation')" title="Change author or work">✎</button></div>
         <div class="dcite" id="cite-preview">${c.html}${surrogate?' <span class="badge">'+esc(w.source_status)+'</span>':''}</div>
         <div class="vals" style="margin-top:8px">
-          <button class="btn sm gho" onclick="copyCur('quote')">Quote</button>
-          <button class="btn sm gho" onclick="copyCur('quote_cite')">Q+cite</button>
           <button class="btn sm gho" onclick="copyCur('cite')">Cite</button>
           <button class="btn sm gho" onclick="copyCur('bib')">Biblio</button>
         </div>
@@ -1791,14 +1845,13 @@ function sortNotes(arr){
 }
 function toggleSelMode(){LIB.selMode=!LIB.selMode;LIB.sel=new Set();renderLibrary()}
 function selNote(id,on){on?LIB.sel.add(id):LIB.sel.delete(id);renderBulkBar()}
+function selNone(){LIB.sel=new Set();renderNotes()}
 function selAll(){libResults().forEach(n=>LIB.sel.add(n.id));renderLibrary()}
 function selTagUnion(){const st=new Set();LIB.sel.forEach(id=>{const n=DB.notes.find(x=>x.id===id);if(n)(n.tags||[]).forEach(t=>st.add(t))});return[...st].sort((a,b)=>a.localeCompare(b))}
 function sharedWorkId(){if(!LIB.sel.size)return null;let w;for(const id of LIB.sel){const n=DB.notes.find(x=>x.id===id);if(!n)return null;if(w===undefined)w=n.work_id;else if(w!==n.work_id)return null}return w||null}
 function bulkBarHtml(){
   const sw=sharedWorkId();
   return `<span class="small" style="align-self:center"><b>${LIB.sel.size}</b> selected</span>
-    <button class="btn sm sec" onclick="selAll()">Select all results</button>
-    <button class="btn sm sec" onclick="LIB.sel=new Set();renderLibrary()">Clear</button>
     <span style="border-left:1px solid var(--line);height:22px"></span>
     <input id="bulk-tag-add" placeholder="tag…" style="width:100px">
     <button class="btn sm" onclick="bulkTag(true)">+ Add tag</button>
@@ -2074,7 +2127,7 @@ function renderSettings(){
   </div>
   <div class="card set-section">
     <h3>Account</h3>
-    <p class="small muted">${esc((USER&&USER.email)||'')} · Notes on Books v2.0</p>
+    <p class="small muted">${esc((USER&&USER.email)||'')} · Notes on Books v2.1</p>
     <button class="btn sec" onclick="sb.auth.signOut().then(()=>location.reload())">Sign out</button>
   </div>`;
   const pinIn=$('pin-in');if(pinIn)makeAutocomplete(pinIn,allTags,{onEnter:v=>{pinIn.value=v;pin(v)}});
