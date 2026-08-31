@@ -95,7 +95,8 @@ body.v2 #view-works,body.v2 #view-people,body.v2 #view-settings{
 .nrow .r3{margin-top:6px;display:flex;gap:4px;flex-wrap:wrap}
 .nrow .tg{font-size:10.5px;background:var(--chip);border-radius:999px;padding:2px 7px;color:var(--muted)}
 .groupbar{position:sticky;top:0;background:#f4efe7;border-bottom:1px solid var(--line);padding:6px 13px;
-  font-size:11.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);z-index:2}
+  font-size:11.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);z-index:2;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.35}
 
 /* note detail column */
 .detail{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0}
@@ -116,8 +117,9 @@ body.v2 #view-works,body.v2 #view-people,body.v2 #view-settings{
 .dpanel .dsc{overflow-y:auto;-webkit-overflow-scrolling:touch;flex:1;padding-bottom:18px}
 .blk{padding:10px 12px;border-bottom:1px solid var(--line)}
 .blk .bh{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+.blk .bh .lbl{flex:1}
 .blk .bh .lbl{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
-.blk .bh .add{margin-left:auto;background:none;border:1px solid var(--line);border-radius:6px;min-width:24px;height:24px;font-size:13px;line-height:1;color:var(--muted);padding:0 5px}
+.blk .bh .add{background:none;border:1px solid var(--line);border-radius:6px;min-width:24px;height:24px;font-size:13px;line-height:1;color:var(--muted);padding:0 5px}
 .blk .bh .add:hover{background:var(--chip);color:var(--ink)}
 .blk .vals{display:flex;flex-wrap:wrap;gap:5px}
 .blk .dcite{font-family:var(--serif);font-size:13.5px;line-height:1.45}
@@ -889,6 +891,16 @@ function copyNote(n,mode){ // mode: quote | quote_cite | cite | bib
 </script>
 <script>
 /* ================= nav ================= */
+function activeView(){
+  return ['notes','works','people','settings'].find(x=>{const e=$('view-'+x);return e&&!e.classList.contains('hidden')})||'notes';
+}
+/* saveWork/savePerson used to re-render only the notes view, so a work or author added while
+   standing on the Works/Authors tab didn't appear until a manual reload. */
+function refreshActiveView(){
+  const v=activeView();
+  if(v==='works')renderWorks(); else if(v==='people')renderPeople();
+  else if(v==='settings')renderSettings(); else renderNotes();
+}
 function nav(v){
   if(v==='editor'||v==='library')v='notes';
   document.querySelectorAll('#appbar nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
@@ -945,6 +957,7 @@ function addScriptureRef(){
   addScriptureRefObj(ref);
   vsEl.value='';veEl.value='';
 }
+function commitScrOnBlur(){const el=$('scr-text');if(el&&el.value.trim()&&parseScriptureRefText(el.value.trim()))addScriptureRefFromText()}
 function addScriptureRefFromText(){
   const el=$('scr-text');const v=(el.value||'').trim();if(!v)return;
   const ref=parseScriptureRefText(v);
@@ -1011,13 +1024,31 @@ function rteBar(k){
   return b('bold','<b>B</b>')+b('italic','<i>I</i>')+b('underline','<u>U</u>')+
     `<button class="tbtn" onmousedown="event.preventDefault();fmt('insertUnorderedList')" title="bulleted list">&bull;&nbsp;&#8801;</button>`+
     `<button class="tbtn" onmousedown="event.preventDefault();fmt('insertOrderedList')" title="numbered list">1.&nbsp;&#8801;</button>`+
-    `<button class="tbtn" style="background:var(--hl)" onmousedown="event.preventDefault();fmt('hiliteColor','','#fdf0a8')" title="highlight">✺</button>`+
-    `<button class="tbtn" onmousedown="event.preventDefault();fmt('hiliteColor','','transparent')" title="remove highlight">⌫✺</button>`+
+    `<button class="tbtn" style="background:var(--hl)" onmousedown="event.preventDefault();toggleHighlight()" title="highlight / un-highlight the selection">✺</button>`+
     `<button class="tbtn" onmousedown="event.preventDefault();clearFormatting('${k}')" title="clear formatting — clears the selection, or the whole box if nothing's selected">Tx</button>`+
     `<button class="tbtn" onmousedown="event.preventDefault();captureSelAndOpenCleanup('${k}')" title="clean up pasted text">🧹</button>`+
     `<button class="tbtn" onmousedown="event.preventDefault();autoDetectScripture('${k}')" title="find scripture references (explicit chapter:verse only)">📖+</button>`;
 }
 function fmt(cmd,_,arg){document.execCommand(cmd,false,arg||null)}
+/* One button, both directions: if the selection already sits in highlighted text, clear it;
+   otherwise apply. Handles both execCommand's background-color spans and <mark> from pasted text. */
+function selectionIsHighlighted(){
+  const sel=window.getSelection();
+  if(!sel||!sel.rangeCount)return false;
+  let n=sel.getRangeAt(0).commonAncestorContainer;
+  if(n&&n.nodeType===3)n=n.parentNode;
+  while(n&&n.nodeType===1){
+    if(n.classList&&n.classList.contains('rte'))break;
+    if(n.tagName==='MARK')return true;
+    const bg=n.style&&n.style.backgroundColor;
+    if(bg&&bg!=='transparent'&&!/rgba\(0,\s*0,\s*0,\s*0\)/.test(bg))return true;
+    n=n.parentNode;
+  }
+  return false;
+}
+function toggleHighlight(){
+  document.execCommand('hiliteColor',false,selectionIsHighlighted()?'transparent':'#fdf0a8');
+}
 // Remove-formatting (Tx button): if there's an active text selection in this pane, behave as
 // before (execCommand only touches the selection). If nothing's selected, clear formatting from
 // the whole pane instead — rebuilds it as plain paragraphs (via fragText/textToHtml, the same
@@ -1146,7 +1177,7 @@ function renderWorkModal(){
   const roleRow=(role,arr)=>`<div class="row" style="margin:2px 0">
      <span class="small muted" style="width:80px;text-transform:capitalize">${role}s</span>
      ${arr.map((n,i)=>`<span class="chip on">${esc(n)}<span class="x" onclick="MW._${role}s.splice(${i},1);renderWorkModal()">×</span></span>`).join('')}
-     <input id="role-in-${role}" placeholder="add ${role}…" style="width:140px"></div>`;
+     <input id="role-in-${role}" placeholder="add ${role}… (Enter)" style="width:140px" onblur="setTimeout(commitRolesOnBlur,150)"></div>`;
   const origOpts=DB.works.filter(x=>x.id!==MW.id).map(x=>`<option value="${x.id}" ${x.id===MW.original_work_id?'selected':''}>${esc(x.title)}</option>`).join('');
   $('modal').innerHTML=`
   <h3>${MW.id?'Edit work':'New work'}</h3>
@@ -1277,18 +1308,55 @@ async function fetchUrlMeta(){
   renderWorkModal();
   $('cp-sugg').innerHTML='<div class="sugg" style="cursor:default">'+(found.length?'Filled empty fields: '+found.join(', ')+'. Existing values left untouched.':'Page read, but no usable metadata found.')+'</div>';
 }
+/* A name may arrive as "First Last" (typed) or "Last, First" (from an online lookup, a
+   pasted citation, or habit). Assuming the former and moving the last word to the front turns
+   "Dixon, Thomas" into sort_name "Thomas, Dixon," — which files the author under T and makes
+   them look missing from the Authors list. Detect the comma form and handle both. */
+function normalizePersonName(raw){
+  const t=String(raw||'').trim().replace(/\s+/g,' ').replace(/,\s*$/,'');
+  if(!t)return{name:'',sort_name:''};
+  if(t.includes(',')){
+    const i=t.indexOf(',');
+    const last=t.slice(0,i).trim(), first=t.slice(i+1).trim();
+    return{name:(first?first+' ':'')+last, sort_name:last+(first?', '+first:'')};
+  }
+  const parts=t.split(' ');
+  if(parts.length===1)return{name:t,sort_name:t};
+  return{name:t, sort_name:parts[parts.length-1]+', '+parts.slice(0,-1).join(' ')};
+}
 async function ensurePerson(name){
-  const k=name.toLowerCase();
-  let p=DB.people.find(x=>x.name.toLowerCase()===k);
+  const nm=normalizePersonName(name);
+  const k=nm.name.toLowerCase();
+  /* match on either stored form, so "Dixon, Thomas" finds an existing "Thomas Dixon" */
+  let p=DB.people.find(x=>(x.name||'').toLowerCase()===k
+        ||(x.sort_name||'').toLowerCase()===nm.sort_name.toLowerCase());
   if(p)return p.id;
-  const parts=name.split(/\s+/);
-  const sort=parts.length>1?parts[parts.length-1]+', '+parts.slice(0,-1).join(' '):name;
-  const{data,error}=await sb.from('people').insert({name,sort_name:sort,urls:[],tags:[]}).select().single();
+  const{data,error}=await sb.from('people').insert({name:nm.name,sort_name:nm.sort_name,urls:[],tags:[]}).select().single();
   if(error){toast(error.message);throw error}
   DB.people.push(data);DB.people.sort((a,b)=>(a.sort_name||a.name).localeCompare(b.sort_name||b.name));
   return data.id;
 }
+/* Typed text in the author/editor/translator boxes only became a chip on Enter. Clicking
+   "Save work" straight afterwards threw it away silently — which is how works ended up in the
+   database with no author at all. Commit anything pending before saving, and on blur so the
+   chip visibly appears. */
+function commitPendingRoles(){
+  if(!MW)return false;
+  let added=false;
+  ['author','editor','translator'].forEach(role=>{
+    const el=$('role-in-'+role);
+    if(el&&el.value.trim()){MW['_'+role+'s'].push(el.value.trim());el.value='';added=true}
+  });
+  return added;
+}
+function commitRolesOnBlur(){
+  // guard: never re-render (and thus re-open) a modal that has already been closed by Save
+  const bg=$('modal-bg');
+  if(!MW||!bg||bg.classList.contains('hidden'))return;
+  if(commitPendingRoles())renderWorkModal();
+}
 async function saveWork(){
+  commitPendingRoles();
   if(!MW.title.trim()){toast('Title required');return}
   const rec={title:MW.title.trim(),pub:MW.pub,source_status:MW.source_status,original_work_id:MW.original_work_id,review_flag:MW.review_flag||'',urls:MW.urls,tags:MW.tags,notes:MW.notes};
   let wid=MW.id;
@@ -1303,7 +1371,7 @@ async function saveWork(){
   if(rows.length){const{data,error}=await sb.from('work_contributors').insert(rows).select();if(error){toast(error.message);return}DB.wc.push(...data)}
   if(KINDLE_IMPORT){const ki=KINDLE_IMPORT;KINDLE_IMPORT=null;await finishKindleImport(wid,ki);return}
   if(CUR)CUR.work_id=wid;
-  closeModal();toast('Work saved');renderEditor();
+  closeModal();toast('Work saved');refreshActiveView();
 }
 async function deleteWork(){
   const n=DB.notes.filter(x=>x.work_id===MW.id).length;
@@ -1557,7 +1625,10 @@ function toolRowHtml(){
 
 function filtersPopHtml(){
   const counts=tagCounts(),pinned=(DB.settings.pinned_tags||[]);
-  const top=[...pinned,...Object.keys(counts).filter(t=>!pinned.includes(t)).sort((a,b)=>counts[b]-counts[a]).slice(0,10)];
+  /* Active tags come FIRST and are always rendered — previously a tag outside the top-10
+     by frequency was filtering invisibly, with nothing on screen saying which. */
+  const top=[...new Set([...LIB.tags,...pinned,
+    ...Object.keys(counts).filter(t=>!pinned.includes(t)).sort((a,b)=>counts[b]-counts[a]).slice(0,10)])];
   const ff=filterableFields().filter(f=>!LIB.purpose||f.purpose===LIB.purpose);
   return `<div class="fpop${FILTERS_OPEN?' open':''}" id="filters-pop">
     <div class="row" style="margin-bottom:4px"><b class="small">Filters</b><span style="flex:1"></span>
@@ -1568,7 +1639,7 @@ function filtersPopHtml(){
       <span class="chip ${LIB.inN?'on':''}" onclick="LIB.inN=!LIB.inN;renderNotes()">notes</span>
       <span class="chip ${LIB.inT?'on':''}" onclick="LIB.inT=!LIB.inT;renderNotes()">tags</span>
     </div></details>
-    <details class="grp" ${LIB.tags.length?'open':''}><summary>Tags${LIB.tags.length?' <span class="badge">'+LIB.tags.length+'</span>':''}</summary><div class="gi">
+    <details class="grp" ${LIB.tags.length?'open':''}><summary>Tags${LIB.tags.length?' <span class="badge">'+LIB.tags.length+'</span> <span style="text-transform:none;font-weight:400;color:var(--accent)">'+esc(LIB.tags.join(', '))+'</span>':''}</summary><div class="gi">
       ${top.map(t=>`<span class="chip ${LIB.tags.includes(t)?'on':''}" onclick="libTag('${esc(t).replace(/'/g,"\\'")}')">${esc(t)}</span>`).join('')}
       <input id="lib-tag-in" placeholder="+ tag filter" style="width:120px" autocomplete="off">
     </div></details>
@@ -1605,7 +1676,7 @@ function listColHtml(){
     <div class="listhead">
       <span class="small muted" id="lib-count"></span>
       <span style="flex:1"></span>
-      <button class="btn sm ${LIB.selMode?'':'gho'}" onclick="toggleSelMode()" title="Select multiple results">${LIB.selMode?'Done':'☑'}</button>
+      <button class="btn sm ${LIB.selMode?'':'gho'}" onclick="toggleSelMode()" title="Tick several results to copy or bulk-edit them">${LIB.selMode?'Done selecting':'☑ Select'}</button>
       <button class="btn sm gho" onclick="toggleList()" title="Collapse the list">«</button>
     </div>
     <div class="listhead" style="border-top:none">
@@ -1684,6 +1755,7 @@ function detPanelHtml(){
     <div class="dsc">
       <div class="blk">
         <div class="bh"><span class="lbl">Citation</span>
+          <button class="add" onclick="openWorkModal(null)" title="Create a new work (and its author)">+</button>
           <button class="add" onclick="togCls('ed-citation')" title="Change author or work">✎</button></div>
         <div class="dcite" id="cite-preview">${c.html}${surrogate?' <span class="badge">'+esc(w.source_status)+'</span>':''}</div>
         <div class="vals" style="margin-top:8px">
@@ -1709,7 +1781,7 @@ function detPanelHtml(){
         <div class="edit" id="ed-loc">
           <div class="row">
             <select id="loc-type">${Object.entries(LOC_TYPES).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select>
-            <input id="loc-val" placeholder="value" style="width:90px" onkeydown="if(event.key==='Enter'){event.preventDefault();addLoc()}">
+            <input id="loc-val" placeholder="value" style="width:90px" onkeydown="if(event.key==='Enter'){event.preventDefault();addLoc()}" onblur="setTimeout(addLoc,150)">
             <button class="btn sm sec" onclick="addLoc()">Add</button></div>
         </div>
       </div>
@@ -1733,7 +1805,7 @@ function detPanelHtml(){
             <input id="scr-ve" placeholder="–v" style="width:52px" onkeydown="if(event.key==='Enter'){event.preventDefault();addScriptureRef()}">
             <button class="btn sm sec" onclick="addScriptureRef()">Add</button></div>
           <div class="row" style="margin-top:5px">
-            <input id="scr-text" placeholder="or type e.g. John 3:16-21" style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();addScriptureRefFromText()}">
+            <input id="scr-text" placeholder="or type e.g. John 3:16-21" style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();addScriptureRefFromText()}" onblur="setTimeout(commitScrOnBlur,150)">
             <button class="btn sm sec" onclick="addScriptureRefFromText()">Add</button></div>
         </div>
       </div>
@@ -1742,7 +1814,7 @@ function detPanelHtml(){
         <div class="vals" id="cur-tags">${CUR.tags.map(tagChip).join('')||'<span class="small muted">none</span>'}</div>
         <div class="edit" id="ed-tags">
           <div class="vals" id="pin-tags">${(DB.settings.pinned_tags||[]).map(pinChip).join('')}</div>
-          <input id="tag-in" placeholder="add tag… (Enter)" style="width:100%;margin-top:6px" autocomplete="off">
+          <input id="tag-in" placeholder="add tag… (Enter)" style="width:100%;margin-top:6px" autocomplete="off" onblur="setTimeout(addTagFromInput,150)">
         </div>
       </div>
     </div>
@@ -1851,7 +1923,8 @@ function selTagUnion(){const st=new Set();LIB.sel.forEach(id=>{const n=DB.notes.
 function sharedWorkId(){if(!LIB.sel.size)return null;let w;for(const id of LIB.sel){const n=DB.notes.find(x=>x.id===id);if(!n)return null;if(w===undefined)w=n.work_id;else if(w!==n.work_id)return null}return w||null}
 function bulkBarHtml(){
   const sw=sharedWorkId();
-  return `<span class="small" style="align-self:center"><b>${LIB.sel.size}</b> selected</span>
+  return `<span class="small" style="align-self:center;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)">Bulk edit</span>
+    <span class="small" style="align-self:center"><b>${LIB.sel.size}</b> ticked — changes below apply to all of them</span>
     <span style="border-left:1px solid var(--line);height:22px"></span>
     <input id="bulk-tag-add" placeholder="tag…" style="width:100px">
     <button class="btn sm" onclick="bulkTag(true)">+ Add tag</button>
@@ -2017,12 +2090,14 @@ function openPersonModal(pid){
 }
 async function savePerson(){
   if(!MP.name.trim()){toast('Name required');return}
-  if(!MP.sort_name.trim()){const p=MP.name.trim().split(/\s+/);MP.sort_name=p.length>1?p[p.length-1]+', '+p.slice(0,-1).join(' '):MP.name}
+  {const nm=normalizePersonName(MP.name);
+   MP.name=nm.name;                                    // "Dixon, Thomas" -> "Thomas Dixon"
+   if(!MP.sort_name.trim())MP.sort_name=nm.sort_name;}
   const rec={name:MP.name.trim(),sort_name:MP.sort_name.trim(),dates:MP.dates,notes:MP.notes,urls:MP.urls,tags:MP.tags};
   if(MP.id){const{error}=await sb.from('people').update(rec).eq('id',MP.id);if(error){toast(error.message);return}Object.assign(P(MP.id),rec)}
   else{const{data,error}=await sb.from('people').insert(rec).select().single();if(error){toast(error.message);return}DB.people.push(data)}
   DB.people.sort((a,b)=>(a.sort_name||a.name).localeCompare(b.sort_name||b.name));
-  closeModal();renderPeople();toast('Saved');
+  closeModal();refreshActiveView();toast('Saved');
 }
 async function deletePerson(){
   if(!confirm('Delete this person? Their name will be removed from all works.'))return;
@@ -2127,7 +2202,7 @@ function renderSettings(){
   </div>
   <div class="card set-section">
     <h3>Account</h3>
-    <p class="small muted">${esc((USER&&USER.email)||'')} · Notes on Books v2.1</p>
+    <p class="small muted">${esc((USER&&USER.email)||'')} · Notes on Books v2.4</p>
     <button class="btn sec" onclick="sb.auth.signOut().then(()=>location.reload())">Sign out</button>
   </div>`;
   const pinIn=$('pin-in');if(pinIn)makeAutocomplete(pinIn,allTags,{onEnter:v=>{pinIn.value=v;pin(v)}});
