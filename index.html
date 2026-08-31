@@ -2081,6 +2081,11 @@ function openPersonModal(pid){
   <label>URLs (one per line — bio pages etc.)</label>
   <textarea style="width:100%" rows="2" onchange="MP.urls=this.value.split('\\n').map(s=>s.trim()).filter(Boolean)">${esc((MP.urls||[]).join('\n'))}</textarea>
   <label>Notes</label><textarea style="width:100%" rows="3" onchange="MP.notes=this.value">${esc(stripHtml(MP.notes))}</textarea>
+  ${MP.id?`<label>Merge</label>
+  <div class="row"><select id="merge-target" style="flex:1"><option value="">— merge this author into… —</option>
+    ${DB.people.filter(x=>x.id!==MP.id).map(x=>`<option value="${x.id}">${esc(invertName(x))}</option>`).join('')}</select>
+    <button class="btn sm sec" onclick="doMergeFromModal()">Merge</button></div>
+  <p class="small muted">Moves every work link across, then deletes this record. Use for duplicates like "W. Perkins" and "William Perkins".</p>`:''}
   <div class="row" style="margin-top:14px">
     <button class="btn" onclick="savePerson()">Save</button>
     <button class="btn sec" onclick="closeModal()">Cancel</button>
@@ -2098,6 +2103,126 @@ async function savePerson(){
   else{const{data,error}=await sb.from('people').insert(rec).select().single();if(error){toast(error.message);return}DB.people.push(data)}
   DB.people.sort((a,b)=>(a.sort_name||a.name).localeCompare(b.sort_name||b.name));
   closeModal();refreshActiveView();toast('Saved');
+}
+
+/* ================= library health & author merge =================
+   Deliberately narrow: only states that produce wrong output or hide a record.
+   A work with no notes, or an author with no works, is a legitimate bibliography
+   entry and is NOT flagged. */
+function sortNameLooksWrong(p){
+  const n=(p.name||'').trim(), s=(p.sort_name||'').trim();
+  if(!n||!s)return true;
+  if(/,\s*$/.test(s))return true;                       // "Thomas, Dixon,"
+  if(n.split(/\s+/).length>1 && s===n)return true;      // never inverted: "John Flavel"
+  const surname=s.split(',')[0].trim().toLowerCase();    // surname must occur in the name
+  if(surname && !n.toLowerCase().includes(surname))return true;
+  return false;
+}
+function worksMissingAuthor(){
+  return DB.works.filter(w=>!DB.wc.some(c=>c.work_id===w.id));
+}
+function peopleBadSort(){return DB.people.filter(sortNameLooksWrong)}
+function dupPeopleGroups(){
+  const by={};
+  DB.people.forEach(p=>{
+    const s=(p.sort_name||'');
+    const last=s.includes(',')?s.split(',')[0]:String(p.name||'').trim().split(/\s+/).pop();
+    const k=String(last||'').toLowerCase().replace(/[^a-z]/g,'');
+    if(k)(by[k]=by[k]||[]).push(p);
+  });
+  return Object.values(by).filter(g=>g.length>1);
+}
+function dupWorkGroups(){
+  const by={};
+  DB.works.forEach(w=>{
+    const k=String(w.title||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim().slice(0,60);
+    if(k)(by[k]=by[k]||[]).push(w);
+  });
+  return Object.values(by).filter(g=>g.length>1);
+}
+function healthCount(){
+  return worksMissingAuthor().length+peopleBadSort().length+dupPeopleGroups().length+dupWorkGroups().length;
+}
+/* Move every contribution from one author to another, then delete the empty one.
+   Fills any blank biographical field on the surviving record from the one being merged
+   away, so nothing is silently lost. */
+async function mergePeople(fromId,toId){
+  if(fromId===toId)return;
+  const from=P(fromId), to=P(toId);
+  if(!from||!to)return;
+  for(const r of DB.wc.filter(c=>c.person_id===fromId)){
+    const clash=DB.wc.find(c=>c.work_id===r.work_id&&c.person_id===toId&&c.role===r.role);
+    if(clash){
+      const{error}=await sb.from('work_contributors').delete().eq('id',r.id);
+      if(error){toast(error.message);return}
+      DB.wc=DB.wc.filter(x=>x.id!==r.id);
+    }else{
+      const{error}=await sb.from('work_contributors').update({person_id:toId}).eq('id',r.id);
+      if(error){toast(error.message);return}
+      r.person_id=toId;
+    }
+  }
+  const carry={};
+  ['dates','notes'].forEach(k=>{if(!String(to[k]||'').trim()&&String(from[k]||'').trim())carry[k]=from[k]});
+  const urls=[...new Set([...(to.urls||[]),...(from.urls||[])])];
+  if(urls.length!==(to.urls||[]).length)carry.urls=urls;
+  if(Object.keys(carry).length){
+    const{error}=await sb.from('people').update(carry).eq('id',toId);
+    if(error){toast(error.message);return}
+    Object.assign(to,carry);
+  }
+  const{error}=await sb.from('people').delete().eq('id',fromId);
+  if(error){toast(error.message);return}
+  DB.people=DB.people.filter(x=>x.id!==fromId);
+  toast('Merged into '+to.name);
+}
+async function doMergeFromModal(){
+  const sel=$('merge-target'); if(!sel||!sel.value){toast('Choose an author to merge into');return}
+  const to=P(sel.value), from=MP.id?P(MP.id):null;
+  if(!from||!to)return;
+  const n=DB.wc.filter(c=>c.person_id===from.id).length;
+  if(!confirm(`Merge "${from.name}" into "${to.name}"?\n\n${n} work link${n===1?'':'s'} will move across, then "${from.name}" is deleted. This cannot be undone.`))return;
+  await mergePeople(from.id,to.id);
+  closeModal();refreshActiveView();
+}
+function fixSortName(pid){
+  const p=P(pid); if(!p)return;
+  const nm=normalizePersonName(p.name);
+  const proposed=nm.sort_name;
+  if(!confirm(`Set sort name for "${p.name}" to:\n\n    ${proposed}\n\n(It is currently "${p.sort_name||'(blank)'}".)`))return;
+  sb.from('people').update({name:nm.name,sort_name:proposed}).eq('id',pid).then(({error})=>{
+    if(error){toast(error.message);return}
+    p.name=nm.name;p.sort_name=proposed;
+    DB.people.sort((a,b)=>(a.sort_name||a.name).localeCompare(b.sort_name||b.name));
+    toast('Sort name fixed');refreshActiveView();
+  });
+}
+function healthCardHtml(){
+  const noAuth=worksMissingAuthor(), badSort=peopleBadSort(),
+        dupP=dupPeopleGroups(), dupW=dupWorkGroups();
+  const total=noAuth.length+badSort.length+dupP.length+dupW.length;
+  return `<div class="card set-section">
+    <h3>Library health ${total?'<span class="badge">'+total+'</span>':''}</h3>
+    <p class="small muted">Only genuine faults are listed — things that break a citation or hide a
+      record. A work with no notes, or an author you have not sourced yet, is a normal bibliography
+      entry and is never flagged.</p>
+    ${!total?'<p class="small" style="color:var(--accent)">✓ Nothing to fix.</p>':''}
+    ${noAuth.length?`<div style="margin-top:10px"><b class="small">Works with no author (${noAuth.length})</b>
+      <p class="small muted" style="margin:2px 0 6px">These cannot produce a citation.</p>
+      ${noAuth.map(w=>`<div class="row" style="margin:3px 0"><span class="small" style="flex:1">${esc(w.title.slice(0,90))}${w.title.length>90?'…':''}</span>
+        <button class="btn sm sec" onclick="openWorkModal('${w.id}')">Add author</button></div>`).join('')}</div>`:''}
+    ${badSort.length?`<div style="margin-top:12px"><b class="small">Malformed sort names (${badSort.length})</b>
+      <p class="small muted" style="margin:2px 0 6px">These file the author under the wrong letter, which makes them look missing.</p>
+      ${badSort.map(p=>`<div class="row" style="margin:3px 0"><span class="small" style="flex:1">${esc(p.name)} <span class="muted">→ sorts as "${esc(p.sort_name||'(blank)')}"</span></span>
+        <button class="btn sm sec" onclick="fixSortName('${p.id}')">Fix</button></div>`).join('')}</div>`:''}
+    ${dupP.length?`<div style="margin-top:12px"><b class="small">Possible duplicate authors (${dupP.length})</b>
+      <p class="small muted" style="margin:2px 0 6px">Same surname. Open one and use "Merge into…" if they are the same person.</p>
+      ${dupP.map(g=>`<div class="row" style="margin:3px 0"><span class="small" style="flex:1">${g.map(p=>esc(p.name)+' <span class="muted">('+DB.wc.filter(c=>c.person_id===p.id).length+')</span>').join('  ·  ')}</span>
+        ${g.map(p=>`<button class="btn sm sec" onclick="openPersonModal('${p.id}')">${esc(p.name.split(/\s+/).slice(-1)[0])}…</button>`).join('')}</div>`).join('')}</div>`:''}
+    ${dupW.length?`<div style="margin-top:12px"><b class="small">Possible duplicate works (${dupW.length})</b>
+      ${dupW.map(g=>`<div class="row" style="margin:3px 0"><span class="small" style="flex:1">${esc(g[0].title.slice(0,70))}${g[0].title.length>70?'…':''} <span class="muted">×${g.length}</span></span>
+        ${g.map((w,i)=>`<button class="btn sm sec" onclick="openWorkModal('${w.id}')">Open ${i+1}</button>`).join('')}</div>`).join('')}</div>`:''}
+  </div>`;
 }
 async function deletePerson(){
   if(!confirm('Delete this person? Their name will be removed from all works.'))return;
@@ -2200,9 +2325,10 @@ function renderSettings(){
     <p class="small muted">Kindle: on the book's Notebook page, tap "Export Notebook" to download the HTML file, then import it here.</p>
     <p class="small muted" id="imp-status"></p>
   </div>
+  ${healthCardHtml()}
   <div class="card set-section">
     <h3>Account</h3>
-    <p class="small muted">${esc((USER&&USER.email)||'')} · Notes on Books v2.4</p>
+    <p class="small muted">${esc((USER&&USER.email)||'')} · Notes on Books v2.5</p>
     <button class="btn sec" onclick="sb.auth.signOut().then(()=>location.reload())">Sign out</button>
   </div>`;
   const pinIn=$('pin-in');if(pinIn)makeAutocomplete(pinIn,allTags,{onEnter:v=>{pinIn.value=v;pin(v)}});
