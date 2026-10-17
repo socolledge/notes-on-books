@@ -84,7 +84,7 @@ body.v2 #view-works,body.v2 #view-people,body.v2 #view-settings{
 .pager .pos{font-size:12px;color:var(--muted);padding:0 4px;white-space:nowrap;font-variant-numeric:tabular-nums}
 
 /* results list */
-.listcol{flex:0 0 var(--listw,330px);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0;background:var(--panel)}
+.listcol{flex:0 0 var(--listw,330px);min-width:0;max-width:var(--listw,330px);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0;background:var(--panel)}
 .listhead{padding:8px 11px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:6px;flex:0 0 auto;flex-wrap:wrap}
 .listscroll{overflow-y:auto;-webkit-overflow-scrolling:touch;flex:1}
 .nrow{padding:11px 13px;border-bottom:1px solid var(--line);cursor:pointer;display:block;width:100%;text-align:left;background:none;border-left:3px solid transparent;font-family:var(--sans)}
@@ -92,7 +92,7 @@ body.v2 #view-works,body.v2 #view-people,body.v2 #view-settings{
 .nrow.on{background:#f4efe7;border-left-color:var(--accent)}
 .nrow .r1{font-size:12px;color:var(--muted);display:flex;gap:6px;align-items:baseline;margin-bottom:3px;flex-wrap:wrap}
 .nrow .r1 b{color:var(--ink);font-weight:600}
-.nrow .r2{font-family:var(--serif);font-size:14.5px;line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;color:var(--ink)}
+.nrow .r2{overflow-wrap:anywhere;font-family:var(--serif);font-size:14.5px;line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;color:var(--ink)}
 .nrow .r3{margin-top:6px;display:flex;gap:4px;flex-wrap:wrap}
 .nrow .tg{font-size:10.5px;background:var(--chip);border-radius:999px;padding:2px 7px;color:var(--muted)}
 .groupbar{position:sticky;top:0;background:#f4efe7;border-bottom:1px solid var(--line);padding:6px 13px;
@@ -104,7 +104,11 @@ body.v2 #view-works,body.v2 #view-people,body.v2 #view-settings{
 .v2panes{flex:1;display:flex;gap:12px;padding:12px;min-height:0}
 .v2pane{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:12px;display:flex;flex-direction:column;min-width:0;min-height:0}
 .v2pane .pane-head{position:static;flex:0 0 auto;flex-wrap:wrap}
-.v2pane .rte{min-height:0;flex:1}
+.v2pane .rte{min-height:0;flex:1;overflow-wrap:anywhere}
+/* A flex item can't shrink below its longest unbreakable word (min-width:auto). One long URL
+   or OCR run in a note preview made the results column balloon and push Details off-screen —
+   only when that note was among the rendered results, e.g. filtered to one Charnock volume. */
+.groupbar,.nrow .r1,.nrow .r3{overflow-wrap:anywhere;min-width:0}
 .facts-strip{flex:0 0 auto;display:flex;align-items:center;gap:5px;flex-wrap:wrap;padding:7px 12px;
   background:var(--panel);border-bottom:1px solid var(--line)}
 .facts-strip .fcite{font-family:var(--serif);font-size:13px;margin-right:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:42%}
@@ -112,7 +116,7 @@ body.v2 #view-works,body.v2 #view-people,body.v2 #view-settings{
 .fact.acc{background:#efe4d6;color:var(--accent)}
 
 /* details panel */
-.dpanel{flex:0 0 var(--dpanelw,300px);background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.dpanel{flex:0 0 var(--dpanelw,300px);min-width:0;background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
 .dpanel .dhd{padding:8px 11px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:7px;flex:0 0 auto}
 .dpanel .dhd .t{font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
 .dpanel .dsc{overflow-y:auto;-webkit-overflow-scrolling:touch;flex:1;padding-bottom:18px}
@@ -133,7 +137,7 @@ body.v2 #view-works,body.v2 #view-people,body.v2 #view-settings{
 .blk .bh .add{background:none;border:1px solid var(--line);border-radius:6px;min-width:24px;height:24px;font-size:13px;line-height:1;color:var(--muted);padding:0 5px}
 .blk .bh .add:hover{background:var(--chip);color:var(--ink)}
 .blk .vals{display:flex;flex-wrap:wrap;gap:5px}
-.blk .dcite{font-family:var(--serif);font-size:13.5px;line-height:1.45}
+.blk .dcite{overflow-wrap:anywhere;font-family:var(--serif);font-size:13.5px;line-height:1.45}
 .blk .dcite i{font-style:italic}
 .blk .kv{display:flex;justify-content:space-between;gap:8px;font-size:12.5px;padding:3px 0}
 .blk .kv span{color:var(--muted)}
@@ -324,7 +328,7 @@ table.tags td{border-bottom:1px solid var(--line);padding:6px 8px;font-size:13.5
   </div>
 </div>
 
-<div id="modal-bg" class="hidden" onclick="if(event.target===this)closeModal()"><div id="modal"></div></div>
+<div id="modal-bg" class="hidden" onclick="if(event.target===this)backdropClose()"><div id="modal"></div></div>
 <div id="toast" class="hidden"></div>
 
 <script>
@@ -778,7 +782,12 @@ function lastName(p){
   if(p.sort_name&&p.sort_name.includes(','))return p.sort_name.split(',')[0].trim();
   return String(p.name||'').trim().split(/\s+/).pop();
 }
-const WORK_TYPES={book:'Book',article:'Journal article',web:'Webpage'};
+const WORK_TYPES={book:'Book',article:'Journal article',thesis:'Thesis / dissertation',web:'Webpage'};
+// Chicago's form for the degree: "PhD diss.", "ThM thesis", "MA thesis"
+function degreeLabel(d){d=String(d||'').trim();if(!d)return'PhD diss.';
+  if(/^ph\.?\s*d\.?$/i.test(d)||/^doctor/i.test(d))return'PhD diss.';
+  if(/^(th\.?m|m\.?a|m\.?th|m\.?phil|b\.?a|m\.?div)\.?$/i.test(d))return d.replace(/\./g,'')+' thesis';
+  return d;}
 function workType(w){return(w&&w.pub&&WORK_TYPES[w.pub.type])?w.pub.type:'book'}
 // returns {html, text} — html uses <i> for italics
 function citeWork(work,opts){
@@ -834,6 +843,28 @@ function citeWork(work,opts){
     let s=authors.length?esc(nameList(authors,false))+', ':'';
     s+=Q(work.title,',')+' '+(jr?T(jr)+' ':'')+volIss+(locs?': '+esc(locs):'')+'.';
     return wrap(s.replace(/\s+\./g,'.'));
+  }
+
+  /* ---- theses and dissertations ---- */
+  if(type==='thesis'){
+    const deg=degreeLabel(pub.degree), inst=pub.institution||'';
+    if(style==='mla'){
+      if(o.form==='intext')return wrap('('+esc(authors[0]?lastName(authors[0]):work.title)+(locs?' '+esc(locs):'')+')');
+      const mdeg=/diss/i.test(deg)?deg.replace(/diss\.?/i,'dissertation'):deg;
+      let s=authors.length?esc(nameList(authors,true))+'. ':'';
+      s+=T(work.title)+'. '+(pub.year?esc(pub.year)+'. ':'')+[inst,mdeg].filter(Boolean).map(esc).join(', ')+'.';
+      if(o.form==='note'&&locs)s+=' '+esc(locs)+'.';
+      return wrap(s);
+    }
+    const paren=[deg,inst,pub.year].filter(Boolean).map(esc).join(', ');
+    if(o.form==='bib'){
+      let s=authors.length?esc(nameList(authors,true))+'. ':'';
+      s+=Q(work.title,'.')+' '+paren+'.';
+      return wrap(s);
+    }
+    let s=authors.length?esc(nameList(authors,false))+', ':'';
+    s+=Q(work.title)+' ('+paren+')'+(locs?', '+esc(locs):'')+'.';
+    return wrap(s);
   }
 
   /* ---- webpages ---- */
@@ -939,7 +970,8 @@ function renderCustomStyle(cs,o,work,authors,editors,trans,pub,locs){
     imprint:esc((pub.imprint||'').replace(/\s*::\s*/g,': ')),edition:esc((pub.edition||'')),pages:esc(locs||''),
     journal:'<i>'+esc(pub.journal||'')+'</i>',volume:esc(pub.volume||''),issue:esc(pub.issue||''),
     article_pages:esc(String(pub.pages||'').replace(/-/g,'–')),doi:esc(pub.doi||''),
-    site:esc(pub.site||''),url:esc((work.urls||[])[0]||''),accessed:esc(pub.accessed||'')};
+    site:esc(pub.site||''),url:esc((work.urls||[])[0]||''),accessed:esc(pub.accessed||''),
+    institution:esc(pub.institution||''),degree:esc(pub.degree?degreeLabel(pub.degree):'')};
   let h=esc(tpl).replace(/\{(\w+)\}/g,(m,k)=>map[k]!==undefined?map[k]:m);
   h=h.replace(/\(\s*[:,;]?\s*\)/g,'').replace(/\s+([,.;:)])/g,'$1').replace(/([:;])(?=[,.;:)])/g,'').replace(/\(\s*[:,;]?\s*\)/g,'').replace(/,\s*\./g,'.').replace(/\.{2,}/g,'.').replace(/\s{2,}/g,' ').trim();
   const d=document.createElement('div');d.innerHTML=h;
@@ -1335,6 +1367,9 @@ function splitName(raw){
   while(li>1&&NAME_PARTICLES.test(p[li-1]))li--;        // "John Van Engen" -> last "Van Engen"
   return{first:p[0],middle:p.slice(1,li).join(' '),last:p.slice(li).join(' ')};
 }
+/* "et al." is shorthand for unnamed co-authors, never a person. A lookup or pasted citation
+   once turned it into an author record ("al, et"); refuse it everywhere a name enters. */
+const isNotAName=n=>/^\s*(et\.?\s*al\.?|and\s+others|&\s*others|others)\s*$/i.test(String(n||''));
 function composeName(s){
   const first=(s.first||'').trim(),middle=(s.middle||'').trim(),last=(s.last||'').trim();
   const given=[first,middle].filter(Boolean).join(' ');
@@ -1359,6 +1394,20 @@ function findPerson(name,split){
   return DB.people.find(x=>{const n=(x.name||'').toLowerCase(),s=(x.sort_name||'').toLowerCase();
     return n===k||s===ks||n===raw||s===raw});
 }
+/* Lookups often give a shortened form of someone already in the library ("Hyeong Rae Jo" for
+   "Sam Hyeong Rae Jo", "J. Owen" for "John Owen"). Same surname + compatible given names, and only
+   one such person, counts as the same author. */
+function matchExistingPerson(s){
+  const last=(s.last||'').toLowerCase();if(!last)return null;
+  const given=[s.first,s.middle].filter(Boolean).join(' ').toLowerCase().replace(/\./g,'').split(/\s+/).filter(Boolean);
+  const cands=DB.people.filter(p=>{const pp=personParts(p);if((pp.last||'').toLowerCase()!==last)return false;
+    const pg=[pp.first,pp.middle].filter(Boolean).join(' ').toLowerCase().replace(/\./g,'').split(/\s+/).filter(Boolean);
+    if(!given.length||!pg.length)return given.length===pg.length;
+    // every given token must match a token (or initial) on the other side
+    const fits=(a,b)=>a.every(t=>b.some(u=>u===t||(t.length===1&&u[0]===t)||(u.length===1&&t[0]===u)));
+    return fits(given,pg)||fits(pg,given);});
+  return cands.length===1?cands[0]:null;
+}
 async function ensurePerson(name,split){
   const p=findPerson(name,split);
   if(p)return p.id;
@@ -1380,6 +1429,7 @@ function openWorkModal(wid){
   MW._splits={};   // name -> {first,middle,last} for people who don't exist yet
   LOOK=null;
   renderWorkModal();
+  snapModal('work');
 }
 // every name in the modal that isn't an existing person, once each
 function pendingNewPeople(){
@@ -1421,6 +1471,12 @@ function renderWorkModal(){
       ${fld('Year',pub.year,"MW.pub.year=this.value",'70px')}
       ${fld('Pages',pub.pages,"MW.pub.pages=this.value",'90px')}</div>
       <div class="row">${fld('DOI (optional)',pub.doi,"MW.pub.doi=this.value",'260px')}</div>`;
+  }else if(type==='thesis'){
+    pubFields=`<div class="row">
+      ${fld('Degree',pub.degree||'PhD',"MW.pub.degree=this.value",'90px')}
+      ${fld('Institution',pub.institution,"MW.pub.institution=this.value",'280px')}
+      ${fld('Year',pub.year,"MW.pub.year=this.value",'70px')}</div>
+      <p class="small muted" style="margin:2px 0">Degree "PhD" cites as "PhD diss."; "ThM" or "MA" as "… thesis". Add a repository link below if you have one.</p>`;
   }else if(type==='web'){
     pubFields=`<div class="row">
       ${fld('Website name',pub.site,"MW.pub.site=this.value",'220px')}
@@ -1485,8 +1541,26 @@ function renderWorkModal(){
   if(refocus&&$(refocus))$(refocus).focus();
 }
 function addRole(role,name){name=(name||'').trim();if(!name)return;const el=$('role-in-'+role);if(el)el.value='';
+  if(isNotAName(name)){toast('\u201cet al.\u201d isn\u2019t a person \u2014 add each author by name, or just the first');renderWorkModal();return}
   if(!MW['_'+role+'s'].includes(name))MW['_'+role+'s'].push(name);renderWorkModal();const e2=$('role-in-'+role);if(e2)e2.focus()}
-function closeModal(){closeAllAC();$('modal-bg').classList.add('hidden')}
+function closeModal(){closeAllAC();MODAL_SNAP=null;$('modal-bg').classList.add('hidden')}
+/* A click outside a dialog used to close it outright, silently discarding a half-entered work.
+   Now a work or person dialog with unsaved changes asks first; anything else closes as before. */
+let MODAL_SNAP=null;   // {kind, json} taken when a work/person dialog opens
+function modalState(){
+  if(!MODAL_SNAP)return null;
+  if(MODAL_SNAP.kind==='work'&&MW){const t=$('mw-title');
+    return JSON.stringify([MW.title,t?t.value:'',MW.pub,MW._authors,MW._editors,MW._translators,MW.urls,MW.notes,MW.source_status,
+      ...['cp-in','role-in-author','role-in-editor','role-in-translator'].map(id=>$(id)?$(id).value:'')])}
+  if(MODAL_SNAP.kind==='person'&&MP)return JSON.stringify([MP._parts,MP.name,MP.sort_name,MP.dates,MP.urls,MP.notes]);
+  return null;
+}
+function modalDirty(){if(!MODAL_SNAP)return false;const st=modalState();return st!==null&&st!==MODAL_SNAP.json}
+function backdropClose(){
+  if(modalDirty()&&!confirm('You have unsaved changes in this dialog.\n\nOK = discard them and close\nCancel = keep editing'))return;
+  closeModal();
+}
+function snapModal(kind){MODAL_SNAP={kind,json:''};MODAL_SNAP.json=modalState()}
 
 /* ---- online lookup: Crossref (articles, academic books — and free-text citation matching),
    Open Library (with a per-edition picker) and Google Books ---- */
@@ -1500,16 +1574,24 @@ function crPerson(a){
   return{first:g[0]||'',middle:g.slice(1).join(' '),last:(a.family||a.name||'').trim()};
 }
 function crItem(it){
-  const kind=it.type==='journal-article'?'article':(/book|monograph/.test(it.type||'')?(it.type==='book-chapter'?'chapter':'book'):'other');
-  const dp=((it.issued||it['published-print']||it['published-online']||{})['date-parts']||[[]])[0]||[];
+  const kind=it.type==='journal-article'?'article':it.type==='dissertation'?'thesis':(/book|monograph/.test(it.type||'')?(it.type==='book-chapter'?'chapter':'book'):'other');
+  // dissertations carry their date in "approved"; issued is often empty
+  const dateOf=x=>((x||{})['date-parts']||[[]])[0]||[];
+  let dp=dateOf(it.issued);if(!dp[0])dp=dateOf(it['published-print']);if(!dp[0])dp=dateOf(it['published-online']);if(!dp[0])dp=dateOf(it.approved);
   return{src:'Crossref',kind,title:stripHtml((it.title||[''])[0]+(it.subtitle&&it.subtitle[0]?': '+it.subtitle[0]:'')),
     people:(it.author||[]).map(crPerson),editors:(it.editor||[]).map(crPerson),
     journal:stripHtml((it['container-title']||[''])[0]),volume:it.volume||'',issue:it.issue||'',pages:it.page||'',
-    year:dp[0]?String(dp[0]):'',doi:it.DOI||'',publisher:it.publisher||'',place:it['publisher-location']||''};
+    year:dp[0]?String(dp[0]):'',doi:it.DOI||'',publisher:it.publisher||'',place:it['publisher-location']||'',
+    institution:((it.institution||[])[0]||{}).name||'',degree:(it.degree||[])[0]||''};
 }
 async function crossrefSearch(q,rows){
-  const j=await fetchJSON('https://api.crossref.org/works?rows='+(rows||5)+'&select=DOI,title,subtitle,author,editor,container-title,volume,issue,page,issued,published-print,published-online,type,publisher,publisher-location&query.bibliographic='+encodeURIComponent(q));
-  return((j.message&&j.message.items)||[]).filter(it=>(it.title||[]).length).map(crItem).filter(d=>d.kind!=='other');
+  const j=await fetchJSON('https://api.crossref.org/works?rows='+(rows||5)+'&select=DOI,title,subtitle,author,editor,container-title,volume,issue,page,issued,published-print,published-online,approved,degree,type,publisher,publisher-location&query.bibliographic='+encodeURIComponent(q));
+  const items=((j.message&&j.message.items)||[]).filter(it=>(it.title||[]).length).map(crItem).filter(d=>d.kind!=='other');
+  /* Crossref's search can't return a dissertation's institution ("institution" isn't selectable),
+     so fetch the full record for those few hits. */
+  await Promise.allSettled(items.filter(d=>d.kind==='thesis'&&d.doi).map(d=>
+    fetchJSON('https://api.crossref.org/works/'+encodeURIComponent(d.doi)).then(x=>{d.institution=((x.message.institution||[])[0]||{}).name||''})));
+  return items;
 }
 async function lookupOnline(extraQ){
   const title=(MW.title||'').trim(), author=(MW._authors[0]||'').trim();
@@ -1528,7 +1610,7 @@ async function lookupOnline(extraQ){
       people:(v.authors||[]).map(splitName),publisher:v.publisher||'',year:(v.publishedDate||'').slice(0,4)})})}).catch(()=>failed.push('Google Books'));
   await Promise.allSettled([cr,ol,gb]);
   // books first when you're entering a book, articles first when it's an article
-  const want=(MW.pub.type==='article')?'article':'book';
+  const want=({article:'article',thesis:'thesis'})[MW.pub.type]||'book';
   items.sort((a,b)=>(b.kind===want)-(a.kind===want));
   const fnote=failed.length?failed.join(' and ')+' did not respond':'';
   LOOK={items,note:fnote,msg:items.length?'':('No matches found. Try fewer words, or just the title.'+(fnote?' ('+fnote+'.)':''))};
@@ -1536,9 +1618,9 @@ async function lookupOnline(extraQ){
 }
 function lookItemLine(d){
   const who=(d.people||[]).map(p=>composeName(p).name).join(', ');
-  const bits=d.kind==='article'?[d.journal,d.volume&&('vol. '+d.volume),d.issue&&('no. '+d.issue),d.year,d.pages&&('pp. '+d.pages)]
+  const bits=d.kind==='thesis'?[d.degree&&degreeLabel(d.degree),d.institution,d.year]:d.kind==='article'?[d.journal,d.volume&&('vol. '+d.volume),d.issue&&('no. '+d.issue),d.year,d.pages&&('pp. '+d.pages)]
             :[d.place,d.publisher,d.year&&(d.firstPub?'first pub. '+d.year:d.year)];
-  return `<b>${esc(d.title)}</b>${who?' — '+esc(who):''}<br><span class="muted">${esc(bits.filter(Boolean).join(' · '))} · ${d.kind==='article'?'article':d.kind==='chapter'?'book chapter':'book'} via ${d.src}</span>`;
+  return `<b>${esc(d.title)}</b>${who?' — '+esc(who):''}<br><span class="muted">${esc(bits.filter(Boolean).join(' · '))} · ${d.kind==='article'?'article':d.kind==='chapter'?'book chapter':'book'} via ${d.src}</span>`.replace(' · book via',d.kind==='thesis'?' · dissertation via':' · book via');
 }
 function lookupHtml(){
   if(!LOOK)return'';
@@ -1558,13 +1640,19 @@ function lookupHtml(){
 function renderLook(){const el=$('cp-sugg');if(el)el.innerHTML=lookupHtml()}
 function setPeople(role,people){
   if(!people||!people.length)return;
-  MW['_'+role+'s']=people.slice(0,6).map(p=>{const c=composeName(p);MW._splits[c.name]=p;return c.name}).filter(Boolean);
+  MW['_'+role+'s']=people.filter(p=>!isNotAName(composeName(p).name)).slice(0,6).map(p=>{
+    const ex=matchExistingPerson(p);if(ex)return ex.name;          // reuse "Sam Hyeong Rae Jo" for Crossref's "Hyeong Rae Jo"
+    const c=composeName(p);MW._splits[c.name]=p;return c.name}).filter(Boolean);
 }
 function applyLook(i){
   const d=LOOK.items[i];if(!d)return;
   if(d.title)MW.title=d.title;
   setPeople('author',d.people);if(!(d.people||[]).length)setPeople('editor',d.editors);
-  if(d.kind==='article'){
+  if(d.kind==='thesis'){
+    MW.pub.type='thesis';
+    Object.assign(MW.pub,{degree:d.degree||MW.pub.degree||'PhD',institution:d.institution||MW.pub.institution||'',year:d.year||MW.pub.year,doi:d.doi});
+    if(d.doi&&!MW.urls.includes('https://doi.org/'+d.doi))MW.urls.push('https://doi.org/'+d.doi);
+  }else if(d.kind==='article'){
     MW.pub.type='article';
     Object.assign(MW.pub,{journal:d.journal||MW.pub.journal,volume:d.volume,issue:d.issue,pages:d.pages,year:d.year||MW.pub.year,doi:d.doi});
   }else{
@@ -1606,12 +1694,22 @@ function applyEdition(j){
 
 /* ---- Parse: local split of a pasted citation, then Crossref's citation matcher for a second
    opinion — the local heuristics alone "rarely got it right". ---- */
+// Sam Hyeong Rae Jo, "Sensing the Divine: …" (PhD diss., Vrije Universiteit Amsterdam, 2023), 38–44
+function parseThesisCitation(str){
+  const m=str.match(/^(?:(.+?),\s*)?["'\u201c\u2018](.+?)[,.]?["'\u201d\u2019]\s*\(\s*([A-Za-z.\s]+?)\s*(?:diss(?:ertation)?\.?|thesis)\s*,\s*(.+?)\s*,\s*(\d{4})\s*\)/i)
+        ||str.match(/^(?:(.+?)\.\s*)?["'\u201c\u2018](.+?)[,.]?["'\u201d\u2019]\s*([A-Za-z.\s]+?)\s*(?:diss(?:ertation)?\.?|thesis)\s*,\s*(.+?)\s*,\s*(\d{4})/i);
+  if(!m)return false;
+  MW.pub.type='thesis';MW.title=m[2].trim();
+  if(m[1]&&!MW._authors.length&&!isNotAName(m[1]))MW._authors.push(normalizePersonName(m[1].trim()).name);
+  Object.assign(MW.pub,{degree:m[3].trim().replace(/\.$/,'')||'PhD',institution:m[4].trim(),year:m[5]});
+  return true;
+}
 function parseArticleCitation(str){
   const m=str.match(/^(?:(.+?),\s*)?["'\u201c\u2018](.+?)[,.]?["'\u201d\u2019]\s*,?\s*(?:in\s+)?(.+?)\s*,?\s*(?:vol\.?\s*)?(\d+)\s*(?:,?\s*(?:no\.?|issue)\s*(\d+)|\((\d{1,3})\))?\s*(?:\((\d{4})\))?\s*[:,]\s*(?:pp?\.\s*)?(\d+(?:\s*[-\u2013]\s*\d+)?)/i);
   if(!m)return false;
   MW.pub.type='article';
   MW.title=m[2].trim();
-  if(m[1]&&!MW._authors.length)m[1].split(/\s*(?:,|\band\b|&)\s*/).filter(x=>x.trim().length>1).forEach(a=>MW._authors.push(normalizePersonName(a).name));
+  if(m[1]&&!MW._authors.length)m[1].split(/\s*(?:,|\band\b|&)\s*/).filter(x=>x.trim().length>1&&!isNotAName(x)).forEach(a=>MW._authors.push(normalizePersonName(a).name));
   Object.assign(MW.pub,{journal:m[3].replace(/[,.]$/,'').trim(),volume:m[4],issue:m[5]||m[6]||'',pages:m[8].replace(/\s/g,'')});
   if(m[7])MW.pub.year=m[7];else{const y=str.match(/\b(1[5-9]\d\d|20\d\d)\b/);if(y)MW.pub.year=y[1]}
   return true;
@@ -1622,7 +1720,8 @@ async function parseCitation(){
   if(doi){await fetchDoi(doi.replace(/[.,;)\]]+$/,''));return}
   (raw.match(/https?:\/\/[^\s"']+/g)||[]).forEach(u=>{u=u.replace(/[.,;)\]]+$/,'');if(!MW.urls.includes(u))MW.urls.push(u)});
   let str=raw.replace(/https?:\/\/[^\s"']+/g,' ');
-  if(!parseArticleCitation(str.replace(/\s+/g,' ').trim()))parseBookCitation(raw,str);
+  const flat=str.replace(/\s+/g,' ').trim();
+  if(!parseThesisCitation(flat)&&!parseArticleCitation(flat))parseBookCitation(raw,str);
   renderWorkModal();
   $('cp-in').value=raw;
   // second opinion from Crossref's free-text citation matcher
@@ -1711,7 +1810,7 @@ function commitPendingRoles(){
   let added=false;
   ['author','editor','translator'].forEach(role=>{
     const el=$('role-in-'+role);
-    if(el&&el.value.trim()){const v=el.value.trim();if(!MW['_'+role+'s'].includes(v))MW['_'+role+'s'].push(v);el.value='';added=true}
+    if(el&&el.value.trim()){const v=el.value.trim();el.value='';if(isNotAName(v))return;if(!MW['_'+role+'s'].includes(v))MW['_'+role+'s'].push(v);added=true}
   });
   return added;
 }
@@ -1723,6 +1822,7 @@ function commitRolesOnBlur(){
 }
 async function saveWork(){
   commitPendingRoles();closeAllAC();
+  ['_authors','_editors','_translators'].forEach(k=>{MW[k]=MW[k].filter(n=>!isNotAName(n))});
   const te=$('mw-title');if(te)MW.title=te.value;
   if(!MW.title.trim()){toast('Title required');return}
   const rec={title:MW.title.trim(),pub:MW.pub,source_status:MW.source_status,original_work_id:MW.original_work_id,review_flag:MW.review_flag||'',urls:MW.urls,tags:MW.tags,notes:MW.notes};
@@ -1790,6 +1890,7 @@ function parseKindleHtml(html){
     const aEl=doc.querySelector('.authors');
     if(aEl)authors=aEl.textContent.split(';').map(normalizeAuthorName).filter(Boolean);
   }
+  authors=authors.filter(a=>!isNotAName(a));
   const kids=[...bodyC.children];
   let chapter='';const raw=[];
   for(let i=0;i<kids.length;i++){
@@ -1886,7 +1987,7 @@ async function kiContinue(){
     if(KI.publisher)MW.pub.publisher=KI.publisher;
     if(KI.year)MW.pub.year=KI.year;
     MW.pub.edition='Kindle edition';
-    renderWorkModal();
+    renderWorkModal();snapModal('work');
   }
 }
 async function finishKindleImport(wid,ki){
@@ -2527,6 +2628,7 @@ function openPersonModal(pid){
   MP=pid?JSON.parse(JSON.stringify(P(pid))):{id:null,name:'',sort_name:'',dates:'',notes:'',urls:[],tags:[]};
   MP._parts=personParts(MP);
   renderPersonModal();
+  snapModal('person');
 }
 function setPart(k,v){MP._parts[k]=v.trim();const c=composeName(MP._parts);const el=$('mp-preview');
   if(el)el.innerHTML=personPreview(c)}
@@ -2543,6 +2645,9 @@ function renderPersonModal(){
   :`<div class="warn">Run the v2.6 database update (see the release notes) to get separate first / middle / last name fields.</div>
     <label>Name (First Last)</label><input style="width:100%" value="${esc(MP.name)}" onchange="MP.name=this.value">
     <label>Sort name (Last, First)</label><input style="width:100%" value="${esc(MP.sort_name)}" onchange="MP.sort_name=this.value">`}
+  ${MP.id?(()=>{const rows=DB.wc.filter(c=>c.person_id===MP.id);
+    return `<label>Works (${rows.length})</label>${rows.length?rows.map(c=>{const w=W(c.work_id);return w?`<div class="row" style="margin:2px 0"><span class="small" style="flex:1">${esc(w.title)} <span class="muted">· ${esc(c.role)}</span></span>
+      <button class="btn sm sec" onclick="openWorkModal('${w.id}')">Open</button></div>`:''}).join(''):'<p class="small muted" style="margin:2px 0">None yet.</p>'}`})():''}
   <label>Dates (e.g. 1616–1683)</label><input value="${esc(MP.dates)}" onchange="MP.dates=this.value">
   <label>URLs (one per line — bio pages etc.)</label>
   <textarea style="width:100%" rows="2" onchange="MP.urls=this.value.split('\\n').map(s=>s.trim()).filter(Boolean)">${esc((MP.urls||[]).join('\n'))}</textarea>
@@ -2596,6 +2701,22 @@ function worksMissingAuthor(){
   return DB.works.filter(w=>!DB.wc.some(c=>c.work_id===w.id));
 }
 function peopleBadSort(){return DB.people.filter(sortNameLooksWrong)}
+const peopleNotNames=()=>DB.people.filter(p=>isNotAName(p.name)||isNotAName(p.sort_name&&p.sort_name.split(',').reverse().join(' ')));
+/* Remove a bogus "person" (et al.) from every work, then delete it. The works keep their real authors. */
+async function removeNotAName(pid){
+  const p=P(pid);if(!p)return;
+  const n=DB.wc.filter(c=>c.person_id===pid).length;
+  if(!confirm(`Remove "${p.name}" from ${n} work${n===1?'':'s'} and delete it?\n\nThe works keep their other authors.`))return;
+  const{error:e1}=await sb.from('work_contributors').delete().eq('person_id',pid);if(e1){toast(e1.message);return}
+  const{error:e2}=await sb.from('people').delete().eq('id',pid);if(e2){toast(e2.message);return}
+  DB.wc=DB.wc.filter(c=>c.person_id!==pid);DB.people=DB.people.filter(x=>x.id!==pid);
+  toast('Removed');refreshActiveView();
+}
+/* "These are different people" is remembered per exact group, so the Taylors stop being flagged.
+   If a third Taylor arrives later, the group is new and is shown again. */
+const groupKey=(kind,g)=>kind+':'+g.map(x=>x.id).sort().join(',');
+const healthIgnored=k=>(DB.settings.health_ignore||[]).includes(k);
+function ignoreHealth(k){DB.settings.health_ignore=[...new Set([...(DB.settings.health_ignore||[]),k])];saveSettings();refreshActiveView();toast('Won\u2019t flag these again')}
 function dupPeopleGroups(){
   const by={};
   DB.people.forEach(p=>{
@@ -2604,7 +2725,7 @@ function dupPeopleGroups(){
     const k=String(last||'').toLowerCase().replace(/[^a-z]/g,'');
     if(k)(by[k]=by[k]||[]).push(p);
   });
-  return Object.values(by).filter(g=>g.length>1);
+  return Object.values(by).filter(g=>g.length>1&&!healthIgnored(groupKey('p',g)));
 }
 function dupWorkGroups(){
   const by={};
@@ -2612,10 +2733,10 @@ function dupWorkGroups(){
     const k=String(w.title||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim().slice(0,60);
     if(k)(by[k]=by[k]||[]).push(w);
   });
-  return Object.values(by).filter(g=>g.length>1);
+  return Object.values(by).filter(g=>g.length>1&&!healthIgnored(groupKey('w',g)));
 }
 function healthCount(){
-  return worksMissingAuthor().length+peopleBadSort().length+dupPeopleGroups().length+dupWorkGroups().length;
+  return worksMissingAuthor().length+peopleBadSort().length+dupPeopleGroups().length+dupWorkGroups().length+peopleNotNames().length;
 }
 /* Move every contribution from one author to another, then delete the empty one.
    Fills any blank biographical field on the surviving record from the one being merged
@@ -2708,9 +2829,10 @@ async function saveSplitReview(){
   closeModal();toast(`Split ${n} name${n===1?'':'s'}`);refreshActiveView();
 }
 function healthCardHtml(){
-  const noAuth=worksMissingAuthor(), badSort=peopleBadSort(),
-        dupP=dupPeopleGroups(), dupW=dupWorkGroups(), unsplit=peopleUnsplit();
-  const total=noAuth.length+badSort.length+dupP.length+dupW.length;
+  const notNames=peopleNotNames(), notNameIds=new Set(notNames.map(p=>p.id));
+  const noAuth=worksMissingAuthor(), badSort=peopleBadSort().filter(p=>!notNameIds.has(p.id)),
+        dupP=dupPeopleGroups(), dupW=dupWorkGroups(), unsplit=peopleUnsplit().filter(p=>!notNameIds.has(p.id));
+  const total=noAuth.length+badSort.length+dupP.length+dupW.length+notNames.length;
   return `<div class="card set-section">
     <h3>Library health ${total?'<span class="badge">'+total+'</span>':''}</h3>
     ${!HAS_NAME_COLS?`<div class="warn" style="margin-bottom:8px">Database update needed for v2.6 name fields — run the SQL in the v2.6 release notes, then reload.</div>`:''}
@@ -2720,6 +2842,10 @@ function healthCardHtml(){
       record. A work with no notes, or an author you have not sourced yet, is a normal bibliography
       entry and is never flagged.</p>
     ${!total?'<p class="small" style="color:var(--accent)">✓ Nothing to fix.</p>':''}
+    ${notNames.length?`<div style="margin-top:10px"><b class="small">Not a person (${notNames.length})</b>
+      <p class="small muted" style="margin:2px 0 6px">"et al." was saved as if it were an author. Removing it leaves each work's real authors in place.</p>
+      ${notNames.map(p=>`<div class="row" style="margin:3px 0"><span class="small" style="flex:1">${esc(p.name)} <span class="muted">— on ${DB.wc.filter(c=>c.person_id===p.id).map(c=>{const w=W(c.work_id);return w?esc(w.title.slice(0,60)):''}).filter(Boolean).join('; ')||'no works'}</span></span>
+        <button class="btn sm sec" onclick="removeNotAName('${p.id}')">Remove</button></div>`).join('')}</div>`:''}
     ${noAuth.length?`<div style="margin-top:10px"><b class="small">Works with no author (${noAuth.length})</b>
       <p class="small muted" style="margin:2px 0 6px">These cannot produce a citation.</p>
       ${noAuth.map(w=>`<div class="row" style="margin:3px 0"><span class="small" style="flex:1">${esc(w.title.slice(0,90))}${w.title.length>90?'…':''}</span>
@@ -2731,10 +2857,12 @@ function healthCardHtml(){
     ${dupP.length?`<div style="margin-top:12px"><b class="small">Possible duplicate authors (${dupP.length})</b>
       <p class="small muted" style="margin:2px 0 6px">Same surname. Open one and use "Merge into…" if they are the same person.</p>
       ${dupP.map(g=>`<div class="row" style="margin:3px 0"><span class="small" style="flex:1">${g.map(p=>esc(p.name)+' <span class="muted">('+DB.wc.filter(c=>c.person_id===p.id).length+')</span>').join('  ·  ')}</span>
-        ${g.map(p=>`<button class="btn sm sec" onclick="openPersonModal('${p.id}')">${esc(p.name.split(/\s+/).slice(-1)[0])}…</button>`).join('')}</div>`).join('')}</div>`:''}
+        ${g.map(p=>`<button class="btn sm sec" onclick="openPersonModal('${p.id}')" title="Open to merge">${esc(p.name)}</button>`).join('')}
+        <button class="btn sm gho" onclick="ignoreHealth('${groupKey('p',g)}')" title="Stop flagging this pair">Not duplicates</button></div>`).join('')}</div>`:''}
     ${dupW.length?`<div style="margin-top:12px"><b class="small">Possible duplicate works (${dupW.length})</b>
       ${dupW.map(g=>`<div class="row" style="margin:3px 0"><span class="small" style="flex:1">${esc(g[0].title.slice(0,70))}${g[0].title.length>70?'…':''} <span class="muted">×${g.length}</span></span>
-        ${g.map((w,i)=>`<button class="btn sm sec" onclick="openWorkModal('${w.id}')">Open ${i+1}</button>`).join('')}</div>`).join('')}</div>`:''}
+        ${g.map((w,i)=>`<button class="btn sm sec" onclick="openWorkModal('${w.id}')">Open ${i+1}</button>`).join('')}
+        <button class="btn sm gho" onclick="ignoreHealth('${groupKey('w',g)}')" title="Stop flagging these">Not duplicates</button></div>`).join('')}</div>`:''}
   </div>`;
 }
 async function deletePerson(){
@@ -2767,7 +2895,7 @@ function renderSettings(){
         <label>Style name</label><input id="cs-name" placeholder="SBL">
         <label>Footnote template</label><input id="cs-note" style="width:100%" placeholder="{authors}, {title} ({place}: {publisher}, {year}), {pages}.">
         <label>Bibliography template</label><input id="cs-bib" style="width:100%" placeholder="{authors_inv}. {title}. {place}: {publisher}, {year}.">
-        <p class="small muted">Tokens: {authors} {authors_inv} {editors} {translators} {title} {title_plain} {chapter_title} {chapter_author} {chapter_author_inv} {place} {publisher} {year} {edition} {imprint} {pages} — articles: {journal} {volume} {issue} {article_pages} {doi} — webpages: {site} {url} {accessed}. Empty values and stray punctuation are tidied automatically.</p>
+        <p class="small muted">Tokens: {authors} {authors_inv} {editors} {translators} {title} {title_plain} {chapter_title} {chapter_author} {chapter_author_inv} {place} {publisher} {year} {edition} {imprint} {pages} — articles: {journal} {volume} {issue} {article_pages} {doi} — theses: {degree} {institution} — webpages: {site} {url} {accessed}. Empty values and stray punctuation are tidied automatically.</p>
         <button class="btn sm" onclick="addCustomStyle()" style="margin-top:6px">Save style</button>
       </details>
     </div>
@@ -2841,7 +2969,7 @@ function renderSettings(){
   ${healthCardHtml()}
   <div class="card set-section">
     <h3>Account</h3>
-    <p class="small muted">${esc((USER&&USER.email)||'')} · Notes on Books v2.6</p>
+    <p class="small muted">${esc((USER&&USER.email)||'')} · Notes on Books v2.6.1</p>
     <button class="btn sec" onclick="sb.auth.signOut().then(()=>location.reload())">Sign out</button>
   </div>`;
   const pinIn=$('pin-in');if(pinIn)makeAutocomplete(pinIn,allTags,{onEnter:v=>{pinIn.value=v;pin(v)}});

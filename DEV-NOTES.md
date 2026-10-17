@@ -403,3 +403,23 @@ session-info tools for full history).
   never saved it). Now only a NEW work created from the note editor attaches, and it's saved.
   Tested against an in-memory fake Supabase (harness) incl. the pre-migration path; live Crossref
   and Open Library calls verified. iPhone layout deliberately deferred to its own effort.
+
+- v2.6.1 (2026-10-16): five items reported after v2.6 went live. No DB migration.
+  1. "al, et" author: "et al." had been saved as a person. isNotAName() now rejects it at every
+     entry point (typed chip, commit-on-blur/save, lookup/parse authors, Kindle import). Library
+     health lists any existing one under "Not a person" with Remove (drops its work links, then the
+     record; real co-authors untouched). Person modal now lists that person's works with Open.
+  2. Duplicate-author/work flags can be dismissed: "Not duplicates" stores the exact group key in
+     settings.health_ignore (a new member makes it a new group, shown again).
+  3. Work type "Thesis / dissertation" (pub.degree, pub.institution, year). Chicago: Author,
+     "Title" (PhD diss., Inst, Year), pp.; bib/MLA/short forms; degreeLabel() maps PhD -> "PhD
+     diss.", ThM/MA -> "… thesis". Parse recognises the Chicago dissertation form. Crossref
+     dissertations included (date from "approved"; institution isn't a valid search select, so it's
+     fetched from /works/{doi} for thesis hits). matchExistingPerson() reuses a library author when
+     a lookup gives a shortened name ("Hyeong Rae Jo" -> existing "Sam Hyeong Rae Jo").
+  4. Clicking the backdrop no longer discards an edited work/person dialog: snapModal() snapshots
+     on open; backdropClose() confirms if anything changed. Explicit Cancel still closes.
+  5. Results pane ballooning (seen filtered to a Charnock volume): a flex item's min-width:auto is
+     its longest unbreakable word, so a long URL in a note preview widened .listcol (330 -> 580px in
+     the harness) and pushed Details off-screen. .listcol min/max-width + overflow-wrap:anywhere on
+     previews, group bars, citation and panes.
