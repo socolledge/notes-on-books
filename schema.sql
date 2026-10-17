@@ -3,6 +3,9 @@
 --
 -- Migrations for existing installs (run once, in order, only the ones you haven't run yet):
 --   v1.6: alter table notes add column scripture_refs jsonb default '[]';
+--   v2.6: alter table people add column if not exists first_name text default '',
+--                            add column if not exists middle_name text default '',
+--                            add column if not exists last_name text default '';
 --
 -- NOTE (Sept 2026): from 30 Oct 2026 Supabase stops auto-exposing new public-schema
 -- tables to the Data API. Existing tables keep their grants, so a running project is
@@ -14,8 +17,11 @@ create extension if not exists pgcrypto;
 create table people (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
-  name text not null,
-  sort_name text default '',
+  name text not null,                  -- "First Middle Last", derived from the parts below (v2.6)
+  sort_name text default '',            -- "Last, First Middle", derived likewise
+  first_name text default '',
+  middle_name text default '',
+  last_name text default '',
   dates text default '',
   notes text default '',
   urls jsonb default '[]',
@@ -27,7 +33,8 @@ create table works (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
   title text not null,
-  pub jsonb default '{}',              -- {place, publisher, year, imprint, edition}
+  pub jsonb default '{}',              -- {type: book|article|web, place, publisher, year, imprint, edition,
+                                       --  journal, volume, issue, pages, doi, site, accessed}
   source_status text default 'published',  -- published | eebo | surrogate
   original_work_id uuid references works(id) on delete set null,
   review_flag text default '',

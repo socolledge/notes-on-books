@@ -42,6 +42,7 @@ h1,h2,h3{font-family:var(--serif);font-weight:600}
 .badge.gray{background:var(--muted)}
 mark{background:var(--hl)}
 mark.lib-hit{background:var(--hl-search)}
+::highlight(lib-hit){background-color:var(--hl-search)}
 /* ---------- centered auth/setup ---------- */
 .center-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
 .center-wrap .card{width:100%;max-width:430px}
@@ -118,6 +119,16 @@ body.v2 #view-works,body.v2 #view-people,body.v2 #view-settings{
 .blk{padding:10px 12px;border-bottom:1px solid var(--line)}
 .blk .bh{display:flex;align-items:center;gap:6px;margin-bottom:6px}
 .blk .bh .lbl{flex:1}
+.blk .bh{cursor:pointer;user-select:none;-webkit-user-select:none}
+.blk .bh .chev{width:11px;font-size:10px;color:var(--muted)}
+.blk.open{background:#fbf8f3}
+.blk .edit.open label{margin-top:8px}
+.pf-sum{margin-top:7px;font-size:12.5px}
+.pf-sum div{display:flex;justify-content:space-between;gap:10px;padding:2px 0}
+.pf-sum span{color:var(--muted)}
+.pf-sum b{font-weight:600;text-align:right}
+.ptog{display:inline-flex;align-items:center;gap:5px}
+.ptog.on{background:var(--accent);color:#fff;border-color:var(--accent)}
 .blk .bh .lbl{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
 .blk .bh .add{background:none;border:1px solid var(--line);border-radius:6px;min-width:24px;height:24px;font-size:13px;line-height:1;color:var(--muted);padding:0 5px}
 .blk .bh .add:hover{background:var(--chip);color:var(--ink)}
@@ -172,6 +183,7 @@ body.v2 #view-works,body.v2 #view-people,body.v2 #view-settings{
 }
 @media(max-width:760px){
   .strip{display:none}
+  .paneltog{display:none}
   .listcol{flex:1 1 auto;border-right:none}
   .detail{position:absolute;inset:0;background:var(--bg);z-index:40}
   body.stack-list .detail{display:none}
@@ -237,6 +249,9 @@ table.tags td{border-bottom:1px solid var(--line);padding:6px 8px;font-size:13.5
 .note-card .n,.note-card .n *{font-family:var(--nfont)!important;font-size:var(--nsize)!important;line-height:1.55!important}
 .ac-box{position:fixed;z-index:70;background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.15);max-height:220px;overflow-y:auto;font-size:13.5px}
 .ac-item{padding:7px 12px;cursor:pointer}
+.looktop{display:flex;align-items:center;gap:8px;margin:6px 0 4px}
+.lookscroll{max-height:260px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;padding:2px 4px}
+.newppl{background:#fbf8f3;border:1px solid var(--line);border-radius:8px;padding:7px 9px;margin:6px 0}
 .ac-item:hover,.ac-item.on{background:var(--chip)}
 .sugg{border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:6px 0;font-size:13px;cursor:pointer}
 .sugg:hover{background:var(--chip)}
@@ -324,6 +339,10 @@ const stripHtml=h=>{const d=document.createElement('div');d.innerHTML=h||'';retu
 const toast=m=>{const t=$('toast');t.textContent=m;t.classList.remove('hidden');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.add('hidden'),2600)};
 
 /* ================= generic autocomplete (replaces native <datalist>, which is unreliable on iOS Safari) ================= */
+/* Suggestion boxes live on <body>, so a box whose input is torn out by a re-render (the work
+   modal redraws when an author chip is committed on blur) used to be orphaned on screen with
+   no blur ever arriving to close it. Every re-render of a host view now calls closeAllAC(). */
+function closeAllAC(){document.querySelectorAll('.ac-box').forEach(b=>b.remove())}
 function makeAutocomplete(inputEl,getOptions,opts){
   opts=opts||{};
   let box=null,items=[],idx=-1;
@@ -339,16 +358,23 @@ function makeAutocomplete(inputEl,getOptions,opts){
   function pick(val){inputEl.value=val;close();if(opts.onPick)opts.onPick(val)}
   function renderBox(){
     close();
+    if(!inputEl.isConnected)return;
+    /* Suggest only once something is typed — a list popping open on a bare click (showing
+       "Acceptable", the alphabetically first tag) isn't how a type-ahead box should behave. */
     const q=inputEl.value.trim().toLowerCase();
+    if(!q)return;
     const all=getOptions()||[];
-    items=(q?all.filter(t=>t.toLowerCase().includes(q)):all).slice(0,8);
+    // prefix matches first, then anywhere-in-word matches
+    const pre=all.filter(t=>t.toLowerCase().startsWith(q)), mid=all.filter(t=>!t.toLowerCase().startsWith(q)&&t.toLowerCase().includes(q));
+    items=[...pre,...mid].slice(0,8);
     if(!items.length)return;
+    closeAllAC();
     box=document.createElement('div');box.className='ac-box';
     items.forEach(t=>{const row=document.createElement('div');row.className='ac-item';row.textContent=t;row.onmousedown=e=>{e.preventDefault();pick(t)};box.appendChild(row)});
+    box._input=inputEl;box._position=position;
     document.body.appendChild(box);position();
   }
   inputEl.addEventListener('input',renderBox);
-  inputEl.addEventListener('focus',renderBox);
   inputEl.addEventListener('blur',()=>setTimeout(close,150));
   inputEl.addEventListener('keydown',e=>{
     if(e.key==='ArrowDown'&&box){e.preventDefault();idx=Math.min(idx+1,items.length-1);highlight()}
@@ -362,6 +388,9 @@ function makeAutocomplete(inputEl,getOptions,opts){
   });
   window.addEventListener('resize',position);
 }
+// boxes are position:fixed, so keep each attached to its input when a panel scrolls under it
+document.addEventListener('scroll',()=>{document.querySelectorAll('.ac-box').forEach(b=>{
+  if(!b._input||!b._input.isConnected)b.remove();else b._position()})},true);
 function syncAppbarHeight(){const b=$('appbar');if(b)document.documentElement.style.setProperty('--appbar-h',b.offsetHeight+'px')}
 window.addEventListener('resize',syncAppbarHeight);
 
@@ -426,6 +455,7 @@ async function signUp(){
 async function loadAll(){
   const fetch=async t=>{let all=[],from=0;for(;;){const{data,error}=await sb.from(t).select('*').range(from,from+999);if(error){toast(t+': '+error.message);return all}all=all.concat(data);if(data.length<1000)break;from+=1000}return all};
   [DB.people,DB.works,DB.wc,DB.notes,DB.purposes]=await Promise.all([fetch('people'),fetch('works'),fetch('work_contributors'),fetch('notes'),fetch('purposes')]);
+  {const{error}=await sb.from('people').select('last_name').limit(1);HAS_NAME_COLS=!error}
   DB.notes.sort((a,b)=>(b.date_added||'').localeCompare(a.date_added||''));
   DB.people.sort((a,b)=>(a.sort_name||a.name).localeCompare(b.sort_name||b.name));
   DB.works.sort((a,b)=>a.title.localeCompare(b.title));
@@ -560,8 +590,10 @@ const BIBLE_BOOKS=[
 {name:'2 Maccabees',test:'AP',chapters:15,abbr:['2macc','2mac','2maccabees']}
 ];
 function bookChapterList(b){return b.chapterList||Array.from({length:b.chapters},(_,i)=>i+1)}
+/* "I Cor." / "II Sam." / "First John" -> "1 Cor." etc. Only in front of a book that actually comes
+   numbered — previously any word qualified, so "i. e." became "1 e" and "it is i. e." read as Isaiah 1. */
 function normNumeralPrefix(s){
-  return s.replace(/\b(I{1,3}|1st|2nd|3rd|First|Second|Third)[\s.]+(?=[A-Za-z])/gi,(m,n)=>{
+  return s.replace(/\b(I{1,3}|1st|2nd|3rd|First|Second|Third)[\s.]+(?=(?:sam|kin|kgs|ki\b|chr|cor|th|tim|ti\b|pet|pe\b|pt|jo|jn|io|esd|mac)[a-z]*\b)/gi,(m,n)=>{
     const map={i:'1','1st':'1',first:'1',ii:'2','2nd':'2',second:'2',iii:'3','3rd':'3',third:'3'};
     return (map[n.toLowerCase()]||n)+' ';
   });
@@ -638,12 +670,42 @@ const SCRIPTURE_SEP='(?:\\s*:\\s*|\\.(?=\\d))';
 // Verse-list continuation separator (for non-contiguous groups like "Rom. 5.1.6." or "Rom 8:1, 3, 5")
 // — a comma, or the same tight period-before-digit form used for the main separator.
 const SCRIPTURE_LIST_SEP='(?:\\s*,\\s*|\\.(?=\\d))';
+function romanToInt(s){
+  const v={i:1,v:5,x:10,l:50,c:100};s=String(s||'').toLowerCase();
+  if(!/^[ivxlc]+$/.test(s))return 0;
+  let n=0;for(let i=0;i<s.length;i++){const a=v[s[i]],b=v[s[i+1]]||0;n+=a<b?-a:a}
+  return n;
+}
+/* Early-modern printing gives chapters in Roman numerals: "1 Thes. v. 16, 17", "Rom. viii. 28",
+   "Psal. cxix." Rewrite those to Arabic ("1 Thes 5:16, 17") so the normal detector below handles
+   them. Guards against prose false positives: the book token must be capitalised ("is i. e." and
+   "am v." are not Isaiah/Amos), a lone capital "I" is never a chapter, the numeral must be a valid
+   chapter of that book, and "i. e." is skipped. */
+function arabicizeRomanChapters(s){
+  const okTok=t=>/^[A-Z0-9]/.test(t);
+  const chapOk=(tok,rom)=>{
+    if(rom==='I')return 0;
+    const b=BIBLE_BOOKS.find(x=>x.name===canonicalBook(tok));if(!b)return 0;
+    const n=romanToInt(rom);
+    return(n&&bookChapterList(b).includes(n))?n:0;
+  };
+  // with verses: "Book v. 16" / "Book viii, 28" / "Book xv:3"
+  s=s.replace(new RegExp('\\b('+BOOK_REGEX+')\\.?\\s+([ivxlc]{1,8})\\s*[.,:]\\s*(?=\\d)','gi'),(m,tok,rom)=>{
+    const n=okTok(tok)&&chapOk(tok,rom);return n?tok+' '+n+':':m});
+  // whole chapter: "Psal. cxix." — needs the closing period
+  s=s.replace(new RegExp('\\b('+BOOK_REGEX+')\\.?\\s+([ivxlc]{1,8})\\.(?!\\s*e\\.)','gi'),(m,tok,rom)=>{
+    const n=okTok(tok)&&chapOk(tok,rom);return n?tok+' '+n+'.':m});
+  return s;
+}
 function detectScriptureRefs(text){
   if(!text||!BOOK_REGEX)return[];
-  const norm=normNumeralPrefix(text);
+  const norm=arabicizeRomanChapters(normNumeralPrefix(text));
   const out=[];const seen=new Set();
   const add=ref=>{const lbl=refLabel(ref);if(!seen.has(lbl)){seen.add(lbl);out.push(ref)}};
-  const re=new RegExp('\\b('+BOOK_REGEX+')\\.?\\s+(\\d{1,3})'+SCRIPTURE_SEP+'(\\d{1,3})(?:\\s*[-–—]\\s*(?:(\\d{1,3})'+SCRIPTURE_SEP+'(\\d{1,3})|(\\d{1,3}))|((?:'+SCRIPTURE_LIST_SEP+'\\d{1,3}(?:\\s*[-–—]\\s*\\d{1,3})?)+))?','gi');
+  /* A verse-list item must not be the number that starts the NEXT reference: in
+     "1 Cor. 13:4, 2 Sam. 12:7" the "2" belongs to 2 Samuel, not to 1 Corinthians 13. */
+  const notBook='(?!(?:'+BOOK_REGEX+')\\.?\\s+\\d)';
+  const re=new RegExp('\\b('+BOOK_REGEX+')\\.?\\s+(\\d{1,3})'+SCRIPTURE_SEP+'(\\d{1,3})(?:\\s*[-–—]\\s*(?:(\\d{1,3})'+SCRIPTURE_SEP+'(\\d{1,3})|(\\d{1,3}))|((?:'+SCRIPTURE_LIST_SEP+notBook+'\\d{1,3}(?:\\s*[-–—]\\s*\\d{1,3})?)+))?','gi');
   let m;
   while((m=re.exec(norm))){
     const book=canonicalBook(m[1]);
@@ -706,6 +768,18 @@ function refMatchesQuery(r,q){
 }
 
 /* ================= citations ================= */
+/* Chapter locators are kept for your own navigation but are not part of a standard citation —
+   "…, 372, ch. A Discourse of Delight in Prayer." A discourse/essay title belongs in the note's
+   cited part title instead (chapter_title), which renders as "Title," in Work. */
+const citeLocs=locs=>locatorStr((locs||[]).filter(l=>l.type!=='chapter'));
+function lastName(p){
+  if(!p)return'';
+  if(p.last_name)return p.last_name;
+  if(p.sort_name&&p.sort_name.includes(','))return p.sort_name.split(',')[0].trim();
+  return String(p.name||'').trim().split(/\s+/).pop();
+}
+const WORK_TYPES={book:'Book',article:'Journal article',web:'Webpage'};
+function workType(w){return(w&&w.pub&&WORK_TYPES[w.pub.type])?w.pub.type:'book'}
 // returns {html, text} — html uses <i> for italics
 function citeWork(work,opts){
   // opts: {style:'chicago'|'mla', form:'note'|'bib'|'intext', locators, chapter_title, chapter_author}
@@ -713,13 +787,16 @@ function citeWork(work,opts){
   if(!work)return{html:'',text:''};
   const authors=contribs(work.id,'author'), editors=contribs(work.id,'editor'), trans=contribs(work.id,'translator');
   const pub=work.pub||{};
-  const locs=locatorStr(o.locators);
+  const type=workType(work);
+  const locs=citeLocs(o.locators);
   if(style!=='chicago'&&style!=='mla'){
     const cs=(DB.settings.custom_styles||[]).find(x=>x.id===style);
     if(cs)return renderCustomStyle(cs,o,work,authors,editors,trans,pub,locs);
   }
   const T=t=>'<i>'+esc(t)+'</i>';
-  let html='';
+  const Q=(t,p)=>'“'+esc(t)+(p||'')+'”';      // punctuation goes inside the quotes
+  const url=(work.urls||[])[0]||'';
+  const pages=String(pub.pages||'').replace(/-/g,'–');
   const pubBlock=()=>{ // "Place: Publisher, Year" with graceful fallbacks
     const bits=[];
     if(pub.place&&pub.publisher)bits.push(pub.place+': '+pub.publisher);
@@ -729,16 +806,77 @@ function citeWork(work,opts){
     if(pub.year)bits.push(pub.year);
     return bits.join(', ');
   };
+  // a part title (essay, treatise, discourse) inside the volume; its author defaults to the volume's
+  const part=(o.chapter_title||'').trim(), partAuthor=(o.chapter_author||'').trim();
+  const whoNote=partAuthor||nameList(authors,false), whoBib=partAuthor?invertLoose(partAuthor):nameList(authors,true);
+  function wrap(h){const d=document.createElement('div');d.innerHTML=h;return{html:h,text:d.textContent}}
+
+  /* ---- journal articles ---- */
+  if(type==='article'){
+    const vol=pub.volume||'', iss=pub.issue||'', jr=pub.journal||'';
+    if(style==='mla'){
+      if(o.form==='intext')return wrap('('+esc(authors[0]?lastName(authors[0]):work.title)+(locs?' '+esc(locs):'')+')');
+      let s=authors.length?esc(nameList(authors,true))+'. ':'';
+      s+=Q(work.title,'.')+' '+(jr?T(jr):'');
+      const bits=[];if(vol)bits.push('vol. '+esc(vol));if(iss)bits.push('no. '+esc(iss));if(pub.year)bits.push(esc(pub.year));
+      if(pages)bits.push('pp. '+esc(pages));
+      if(bits.length)s+=(jr?', ':'')+bits.join(', ');
+      s+='.';
+      if(o.form==='note'&&locs)s+=' '+esc(locs)+'.';
+      return wrap(s);
+    }
+    const volIss=(vol?esc(vol):'')+(iss?(vol?', ':'')+'no. '+esc(iss):'')+(pub.year?' ('+esc(pub.year)+')':'');
+    if(o.form==='bib'){
+      let s=authors.length?esc(nameList(authors,true))+'. ':'';
+      s+=Q(work.title,'.')+' '+(jr?T(jr)+' ':'')+volIss+(pages?': '+esc(pages):'')+'.';
+      return wrap(s.replace(/\s+\./g,'.'));
+    }
+    let s=authors.length?esc(nameList(authors,false))+', ':'';
+    s+=Q(work.title,',')+' '+(jr?T(jr)+' ':'')+volIss+(locs?': '+esc(locs):'')+'.';
+    return wrap(s.replace(/\s+\./g,'.'));
+  }
+
+  /* ---- webpages ---- */
+  if(type==='web'){
+    const site=pub.site||pub.publisher||'';
+    if(style==='mla'){
+      if(o.form==='intext')return wrap('('+esc(authors[0]?lastName(authors[0]):work.title)+')');
+      let s=authors.length?esc(nameList(authors,true))+'. ':'';
+      s+=Q(work.title,'.');
+      const bits=[];if(site)bits.push(T(site));if(pub.year)bits.push(esc(pub.year));if(url)bits.push(esc(url));
+      if(bits.length)s+=' '+bits.join(', ');
+      s+='.';
+      if(pub.accessed)s+=' Accessed '+esc(pub.accessed)+'.';
+      return wrap(s);
+    }
+    if(o.form==='bib'){
+      let s=authors.length?esc(nameList(authors,true))+'. ':'';
+      s+=Q(work.title,'.');
+      if(site)s+=' '+esc(site)+'.';
+      if(pub.year)s+=' '+esc(pub.year)+'.';
+      if(pub.accessed&&!pub.year)s+=' Accessed '+esc(pub.accessed)+'.';
+      if(url)s+=' '+esc(url)+'.';
+      return wrap(s);
+    }
+    let s=authors.length?esc(nameList(authors,false))+', ':'';
+    s+=Q(work.title,',');
+    const bits=[];if(site)bits.push(esc(site));if(pub.year)bits.push(esc(pub.year));
+    else if(pub.accessed)bits.push('accessed '+esc(pub.accessed));
+    if(url)bits.push(esc(url));
+    s+=(bits.length?' '+bits.join(', '):'')+'.';
+    return wrap(s.replace(/,”\./,'.”'));
+  }
+
+  /* ---- books (and parts of books) ---- */
   if(style==='mla'){
     if(o.form==='intext'){
-      const a=authors[0]?authors[0].name.split(' ').pop():work.title;
+      const a=authors[0]?lastName(authors[0]):work.title;
       return wrap('('+esc(a)+(locs?' '+esc(locs):'')+')');
     }
     // MLA works cited
     let s='';
-    if(o.chapter_author||o.chapter_title){
-      const ca=o.chapter_author||nameList(authors,true);
-      s=esc(invertLoose(ca))+'. "'+esc(o.chapter_title||'')+'." '+T(work.title)+', ';
+    if(part){
+      s=(whoBib?esc(whoBib)+'. ':'')+Q(part,'.')+' '+T(work.title)+', ';
       if(editors.length)s+='edited by '+esc(nameList(editors,false))+', ';
     }else{
       if(authors.length)s=esc(nameList(authors,true))+'. ';
@@ -751,30 +889,30 @@ function citeWork(work,opts){
     if(pub.year)pb.push(esc(pub.year));
     s+=pb.join(', ')+'.';
     if(o.form==='note'&&locs)s+=' '+esc(locs)+'.';
-    return wrap(s);
+    return wrap(s.replace(/,\s*\.$/,'.'));
   }
   // Chicago notes-bibliography
   if(o.form==='bib'){
     let s='';
-    if(o.chapter_author||o.chapter_title){
-      s=esc(invertLoose(o.chapter_author||''))+'. "'+esc(o.chapter_title||'')+'." In '+T(work.title);
+    if(part){
+      s=(whoBib?esc(whoBib)+'. ':'')+Q(part,'.')+' In '+T(work.title);
       if(editors.length)s+=', edited by '+esc(nameList(editors,false));
       s+='. ';
     }else{
       if(authors.length)s=esc(nameList(authors,true))+'. ';
       else if(editors.length)s=esc(nameList(editors,true))+', ed'+(editors.length>1?'s':'')+'. ';
       s+=T(work.title)+'. ';
-      if(!o.chapter_title&&authors.length&&editors.length)s+='Edited by '+esc(nameList(editors,false))+'. ';
+      if(authors.length&&editors.length)s+='Edited by '+esc(nameList(editors,false))+'. ';
       if(trans.length)s+='Translated by '+esc(nameList(trans,false))+'. ';
     }
     const pb=pubBlock();
     s+=esc(pb)+'.';
-    return wrap(s.replace(/\.\.$/,'.'));
+    return wrap(s.replace(/\.\.$/,'.').replace(/\s+\.$/,'.'));
   }
   // footnote form (default)
   let s='';
-  if(o.chapter_author||o.chapter_title){
-    s=esc(o.chapter_author||nameList(authors,false))+', "'+esc(o.chapter_title||'')+'," in '+T(work.title);
+  if(part){
+    s=(whoNote?esc(whoNote)+', ':'')+Q(part,',')+' in '+T(work.title);
     if(editors.length)s+=', ed. '+esc(nameList(editors,false));
   }else{
     if(authors.length)s=esc(nameList(authors,false))+', ';
@@ -788,7 +926,6 @@ function citeWork(work,opts){
   if(locs)s+=', '+esc(locs);
   s+='.';
   return wrap(s);
-  function wrap(h){const d=document.createElement('div');d.innerHTML=h;return{html:h,text:d.textContent}}
 }
 function styleLabel(){const st=DB.settings.citation_style||'chicago';if(st==='chicago')return'Chicago';if(st==='mla')return'MLA';const cs=(DB.settings.custom_styles||[]).find(x=>x.id===st);return cs?cs.name:'Chicago'}
 function renderCustomStyle(cs,o,work,authors,editors,trans,pub,locs){
@@ -799,7 +936,10 @@ function renderCustomStyle(cs,o,work,authors,editors,trans,pub,locs){
     chapter_title:esc(o.chapter_title||''),chapter_author:esc(o.chapter_author||''),
     chapter_author_inv:esc(invertLoose(o.chapter_author||'')),
     place:esc((pub.place||'')),publisher:esc((pub.publisher||'')),year:esc((pub.year||'')),
-    imprint:esc((pub.imprint||'').replace(/\s*::\s*/g,': ')),edition:esc((pub.edition||'')),pages:esc(locs||'')};
+    imprint:esc((pub.imprint||'').replace(/\s*::\s*/g,': ')),edition:esc((pub.edition||'')),pages:esc(locs||''),
+    journal:'<i>'+esc(pub.journal||'')+'</i>',volume:esc(pub.volume||''),issue:esc(pub.issue||''),
+    article_pages:esc(String(pub.pages||'').replace(/-/g,'–')),doi:esc(pub.doi||''),
+    site:esc(pub.site||''),url:esc((work.urls||[])[0]||''),accessed:esc(pub.accessed||'')};
   let h=esc(tpl).replace(/\{(\w+)\}/g,(m,k)=>map[k]!==undefined?map[k]:m);
   h=h.replace(/\(\s*[:,;]?\s*\)/g,'').replace(/\s+([,.;:)])/g,'$1').replace(/([:;])(?=[,.;:)])/g,'').replace(/\(\s*[:,;]?\s*\)/g,'').replace(/,\s*\./g,'.').replace(/\.{2,}/g,'.').replace(/\s{2,}/g,' ').trim();
   const d=document.createElement('div');d.innerHTML=h;
@@ -831,19 +971,30 @@ async function copyRich(html,text){
 function shortTitle(t){
   let s=String(t||'').split(':')[0].trim();
   const w=s.split(/\s+/);
-  if(w.length>4){const st=/^(the|a|an)$/i.test(w[0])?1:0;s=w.slice(st,st+4).join(' ')}
+  if(w.length>4){
+    const st=/^(the|a|an)$/i.test(w[0])?1:0;let k=w.slice(st,st+4);
+    // never end a short title on a function word: "Discourse of Delight", not "Discourse of Delight in"
+    while(k.length>1&&/^(of|in|on|and|the|a|an|to|for|with|by|from|or)$/i.test(k[k.length-1]))k.pop();
+    s=k.join(' ');
+  }
   return s;
 }
 function shortCiteObj(n){
   const w=W(n.work_id);
   if(!w)return{html:'',text:''};
   let ps=contribs(w.id,'author'); if(!ps.length)ps=contribs(w.id,'editor');
-  const last=p=>String(p.name||'').trim().split(/\s+/).pop();
-  const who = !ps.length?'' : ps.length===1?last(ps[0])
+  const last=lastName;   // real surname field — "Van Engen", not "Engen"
+  let who = !ps.length?'' : ps.length===1?last(ps[0])
             : ps.length===2?(last(ps[0])+' and '+last(ps[1])) : (last(ps[0])+' et al.');
-  const t=shortTitle(w.title), locs=locatorStr(n.locators);
-  return{html:(who?esc(who)+', ':'')+'<i>'+esc(t)+'</i>'+(locs?', '+esc(locs):'')+'.',
-         text:(who?who+', ':'')+t+(locs?', '+locs:'')+'.'};
+  if(n.chapter_author)who=String(n.chapter_author).trim().split(/\s+/).pop();
+  const locs=citeLocs(n.locators);
+  // a part title, article or webpage is quoted in the short form; a book title is italicised
+  const quoted=!!(n.chapter_title||'').trim()||workType(w)!=='book';
+  const t=shortTitle((n.chapter_title||'').trim()||w.title);
+  const th=quoted?'“'+esc(t)+(locs?',':'.')+'”':'<i>'+esc(t)+'</i>';
+  const tt=quoted?'“'+t+(locs?',':'.')+'”':t;
+  return{html:(who?esc(who)+', ':'')+th+(quoted?'':(locs?',':'.'))+(locs?' '+esc(locs)+'.':''),
+         text:(who?who+', ':'')+tt+(quoted?'':(locs?',':'.'))+(locs?' '+locs+'.':'')};
 }
 /* Selection drives the export; with nothing ticked it falls back to the open note,
    so a one-off copy doesn't require entering select mode. */
@@ -859,7 +1010,8 @@ async function exportNotes(mode){              // 'quote' = quote+citation, 'qno
   list.forEach(n=>{
     const w=W(n.work_id);
     if(w&&w.source_status!=='published')surrogate=true;
-    const key=w?w.id:'__none';
+    // each discourse within one volume is a separate source: full citation the first time each appears
+    const key=(w?w.id:'__none')+'|'+(n.chapter_title||'').trim().toLowerCase();
     const firstFromWork=!seen.has(key); seen.add(key);
     const c=firstFromWork?citeNoteObj(n,'note'):shortCiteObj(n);
     const qInner=(n.quote_html||'').replace(/^<p>|<\/p>$/g,'');
@@ -966,7 +1118,7 @@ function addScriptureRefFromText(){
   el.value='';
 }
 function rmScriptureRef(i){CUR.scripture_refs.splice(i,1);updateScriptureRow()}
-function updateScriptureRow(){const el=$('scr-chips');if(el)el.innerHTML=(CUR.scripture_refs||[]).map(scriptureChip).join('');scheduleSave()}
+function updateScriptureRow(){setCount('scr',(CUR.scripture_refs||[]).length);const el=$('scr-chips');if(el)el.innerHTML=(CUR.scripture_refs||[]).map(scriptureChip).join('')||'<span class="small muted">none</span>';scheduleSave()}
 function autoDetectScripture(k){
   syncPanes();
   const html=k==='q'?CUR.quote_html:CUR.note_html;
@@ -1080,12 +1232,13 @@ function refreshCite(){
 }
 function pickAuthor(pid){syncPanes();CUR._authorSel=pid||null;if(pid){const wks=DB.works.filter(x=>DB.wc.some(c=>c.work_id===x.id&&c.person_id===pid));if(!wks.some(x=>x.id===CUR.work_id))CUR.work_id=wks.length===1?wks[0].id:null}renderEditor()}
 function pickWork(wid){syncPanes();CUR.work_id=wid||null;renderEditor();scheduleSave()}
-function updateTagsRow(){const p=$('pin-tags'),c=$('cur-tags');if(p)p.innerHTML=(DB.settings.pinned_tags||[]).map(pinChip).join('');if(c)c.innerHTML=CUR.tags.map(tagChip).join('');scheduleSave()}
+function setCount(k,n){const b=$('cnt-'+k);if(b){b.textContent=n;b.style.display=n?'':'none'}}
+function updateTagsRow(){setCount('tags',(CUR.tags||[]).length);const p=$('pin-tags'),c=$('cur-tags');if(p)p.innerHTML=(DB.settings.pinned_tags||[]).map(pinChip).join('');if(c)c.innerHTML=CUR.tags.map(tagChip).join('')||'<span class="small muted">none</span>';scheduleSave()}
 function toggleTag(t){CUR.tags.includes(t)?CUR.tags=CUR.tags.filter(x=>x!==t):CUR.tags.push(t);updateTagsRow()}
 function rmTag(t){CUR.tags=CUR.tags.filter(x=>x!==t);updateTagsRow()}
 function addTagFromInput(){const el=$('tag-in');if(!el)return;const v=el.value.trim();if(!v)return;el.value='';if(!CUR.tags.includes(v))CUR.tags.push(v);updateTagsRow();el.focus()}
-function togglePurpose(name){syncPanes();CUR.purposes.includes(name)?CUR.purposes=CUR.purposes.filter(x=>x!==name):CUR.purposes.push(name);renderEditor();scheduleSave()}
-function updateLocRow(){const el=$('loc-chips');if(el)el.innerHTML=(CUR.locators||[]).map(locChip).join('');refreshCite()}
+function togglePurpose(name){syncPanes();CUR.purposes.includes(name)?CUR.purposes=CUR.purposes.filter(x=>x!==name):CUR.purposes.push(name);renderDetPanel();scheduleSave()}
+function updateLocRow(){setCount('loc',(CUR.locators||[]).length);const el=$('loc-chips');if(el)el.innerHTML=(CUR.locators||[]).map(locChip).join('')||'<span class="small muted">none</span>';refreshCite()}
 function addLoc(){const tEl=$('loc-type'),vEl=$('loc-val');if(!tEl||!vEl)return;const v=vEl.value.trim();if(!v)return;vEl.value='';CUR.locators.push({type:tEl.value,value:v});updateLocRow()}
 function rmLoc(i){CUR.locators.splice(i,1);updateLocRow()}
 function renderPurposeFields(){
@@ -1106,7 +1259,7 @@ function renderPurposeFields(){
   });
   host.innerHTML=h;
 }
-function setPV(pn,key,val){if(!CUR.purpose_values)CUR.purpose_values={};if(!CUR.purpose_values[pn])CUR.purpose_values[pn]={};CUR.purpose_values[pn][key]=val}
+function setPV(pn,key,val){if(!CUR.purpose_values)CUR.purpose_values={};if(!CUR.purpose_values[pn])CUR.purpose_values[pn]={};CUR.purpose_values[pn][key]=val;scheduleSave()}
 function copyCur(mode){syncPanes();copyNote(CUR,mode)}
 let saveTimer=null;
 function scheduleSave(){if(!CUR)return;clearTimeout(saveTimer);setSaveState('dirty');saveTimer=setTimeout(()=>saveNote(true),1200)}
@@ -1162,52 +1315,158 @@ async function deleteNote(){
 }
 
 /* ================= work modal (create/edit, parser, lookup) ================= */
+/* ---- personal names: first / middle / last (v2.6) ----
+   People now store their name in parts. `name` ("First Middle Last") and `sort_name`
+   ("Last, First Middle") are still written on every save — derived from the parts — so the
+   citation formatter, sorting and older code paths keep working unchanged. */
+let HAS_NAME_COLS=false;   // set in loadAll(): true once the v2.6 SQL migration has been run
+const NAME_PARTICLES=/^(van|von|de|der|den|du|la|le|di|da|del|della|des|st\.?|ten|ter)$/i;
+function splitName(raw){
+  const t=String(raw||'').trim().replace(/\s+/g,' ').replace(/,\s*$/,'');
+  if(!t)return{first:'',middle:'',last:''};
+  if(t.includes(',')){                             // "Last, First Middle"
+    const i=t.indexOf(','), last=t.slice(0,i).trim(), rest=t.slice(i+1).trim().split(' ').filter(Boolean);
+    return{first:rest[0]||'',middle:rest.slice(1).join(' '),last};
+  }
+  const p=t.split(' ');
+  if(p.length===1)return{first:'',middle:'',last:t};  // "Augustine"
+  let li=p.length-1;
+  if(/^(jr|sr|ii|iii|iv)\.?$/i.test(p[li])&&li>1)li--;  // keep "King Jr." together
+  while(li>1&&NAME_PARTICLES.test(p[li-1]))li--;        // "John Van Engen" -> last "Van Engen"
+  return{first:p[0],middle:p.slice(1,li).join(' '),last:p.slice(li).join(' ')};
+}
+function composeName(s){
+  const first=(s.first||'').trim(),middle=(s.middle||'').trim(),last=(s.last||'').trim();
+  const given=[first,middle].filter(Boolean).join(' ');
+  return{name:[given,last].filter(Boolean).join(' '),sort_name:last?(last+(given?', '+given:'')):given,
+         first_name:first,middle_name:middle,last_name:last};
+}
+// a person's parts: stored ones if present, otherwise derived from sort_name/name
+function personParts(p){
+  if(p&&(p.last_name||p.first_name))return{first:p.first_name||'',middle:p.middle_name||'',last:p.last_name||''};
+  if(p&&p.sort_name&&p.sort_name.includes(','))return splitName(p.sort_name);
+  return splitName(p?p.name:'');
+}
+/* A name may arrive as "First Last" (typed) or "Last, First" (from an online lookup, a pasted
+   citation, or habit). Kept for the Library-health sort-name repair. */
+function normalizePersonName(raw){return composeName(splitName(raw))}
+function nameRec(s){const c=composeName(s);const r={name:c.name,sort_name:c.sort_name};
+  if(HAS_NAME_COLS){r.first_name=c.first_name;r.middle_name=c.middle_name;r.last_name=c.last_name}return r}
+function findPerson(name,split){
+  const nm=split?composeName(split):normalizePersonName(name);
+  const k=nm.name.toLowerCase(), ks=nm.sort_name.toLowerCase(), raw=String(name||'').trim().toLowerCase();
+  /* match on either stored form, so "Dixon, Thomas" finds an existing "Thomas Dixon" */
+  return DB.people.find(x=>{const n=(x.name||'').toLowerCase(),s=(x.sort_name||'').toLowerCase();
+    return n===k||s===ks||n===raw||s===raw});
+}
+async function ensurePerson(name,split){
+  const p=findPerson(name,split);
+  if(p)return p.id;
+  const{data,error}=await sb.from('people').insert({...nameRec(split||splitName(name)),urls:[],tags:[]}).select().single();
+  if(error){toast(error.message);throw error}
+  DB.people.push(data);DB.people.sort((a,b)=>(a.sort_name||a.name).localeCompare(b.sort_name||b.name));
+  return data.id;
+}
+
 let MW=null; // work being edited in modal
 function openWorkModal(wid){
   syncPanes&&CUR&&syncPanes();
   const w=wid?W(wid):null;
-  MW=w?JSON.parse(JSON.stringify(w)):{id:null,title:'',pub:{place:'',publisher:'',year:'',imprint:'',edition:''},source_status:'published',original_work_id:null,urls:[],tags:[],notes:''};
+  MW=w?JSON.parse(JSON.stringify(w)):{id:null,title:'',pub:{type:'book',place:'',publisher:'',year:'',imprint:'',edition:''},source_status:'published',original_work_id:null,urls:[],tags:[],notes:''};
+  MW.pub=MW.pub||{};if(!MW.pub.type)MW.pub.type='book';
   MW._authors=w?contribs(w.id,'author').map(p=>p.name):[];
   MW._editors=w?contribs(w.id,'editor').map(p=>p.name):[];
   MW._translators=w?contribs(w.id,'translator').map(p=>p.name):[];
+  MW._splits={};   // name -> {first,middle,last} for people who don't exist yet
+  LOOK=null;
   renderWorkModal();
 }
+// every name in the modal that isn't an existing person, once each
+function pendingNewPeople(){
+  const seen=new Set(),out=[];
+  [...MW._authors,...MW._editors,...MW._translators].forEach(n=>{
+    if(seen.has(n))return;seen.add(n);
+    if(!findPerson(n,MW._splits[n]))out.push(n);
+  });
+  return out;
+}
+function setSplit(name,part,val){
+  const s=Object.assign({},MW._splits[name]||splitName(name));s[part]=val.trim();
+  const nn=composeName(s).name||name;
+  ['_authors','_editors','_translators'].forEach(k=>{MW[k]=MW[k].map(x=>x===name?nn:x)});
+  delete MW._splits[name];MW._splits[nn]=s;
+  renderWorkModal();
+}
+const fld=(label,val,on,width)=>`<div class="fieldcol"><label>${label}</label><input style="width:${width||'120px'}" value="${esc(val||'')}" onchange="${on}"></div>`;
 function renderWorkModal(){
-  const pub=MW.pub||{};
+  /* Re-rendering replaces every input, so note which one had focus and give it back. Without
+     this, tabbing from Authors into Editors re-rendered (to show the new author chip) and left
+     the Editors suggestion box orphaned on screen. */
+  const ae=document.activeElement, refocus=(ae&&ae.id&&$('modal').contains(ae))?ae.id:null;
+  closeAllAC();
+  const pub=MW.pub||{}, type=pub.type||'book';
   const roleRow=(role,arr)=>`<div class="row" style="margin:2px 0">
      <span class="small muted" style="width:80px;text-transform:capitalize">${role}s</span>
      ${arr.map((n,i)=>`<span class="chip on">${esc(n)}<span class="x" onclick="MW._${role}s.splice(${i},1);renderWorkModal()">×</span></span>`).join('')}
-     <input id="role-in-${role}" placeholder="add ${role}… (Enter)" style="width:140px" onblur="setTimeout(commitRolesOnBlur,150)"></div>`;
+     <input id="role-in-${role}" placeholder="find or add ${role}…" autocomplete="off" style="width:150px" onblur="setTimeout(commitRolesOnBlur,150)"></div>`;
+  const newPeople=pendingNewPeople();
   const origOpts=DB.works.filter(x=>x.id!==MW.id).map(x=>`<option value="${x.id}" ${x.id===MW.original_work_id?'selected':''}>${esc(x.title)}</option>`).join('');
+  const typeSeg=Object.entries(WORK_TYPES).map(([k,v])=>`<button class="btn sm ${type===k?'':'sec'}" onclick="MW.pub.type='${k}';renderWorkModal()">${v}</button>`).join('');
+  let pubFields='';
+  if(type==='article'){
+    pubFields=`<div class="row">
+      ${fld('Journal',pub.journal,"MW.pub.journal=this.value",'260px')}
+      ${fld('Volume',pub.volume,"MW.pub.volume=this.value",'60px')}
+      ${fld('Issue',pub.issue,"MW.pub.issue=this.value",'60px')}
+      ${fld('Year',pub.year,"MW.pub.year=this.value",'70px')}
+      ${fld('Pages',pub.pages,"MW.pub.pages=this.value",'90px')}</div>
+      <div class="row">${fld('DOI (optional)',pub.doi,"MW.pub.doi=this.value",'260px')}</div>`;
+  }else if(type==='web'){
+    pubFields=`<div class="row">
+      ${fld('Website name',pub.site,"MW.pub.site=this.value",'220px')}
+      ${fld('Published (date or year)',pub.year,"MW.pub.year=this.value",'150px')}
+      ${fld('Accessed',pub.accessed,"MW.pub.accessed=this.value",'130px')}</div>
+      <p class="small muted" style="margin:2px 0">The first URL below is used in the citation.</p>`;
+  }else{
+    pubFields=`<div class="row">
+      ${fld('Place',pub.place,"MW.pub.place=this.value")}
+      ${fld('Publisher',pub.publisher,"MW.pub.publisher=this.value",'180px')}
+      ${fld('Year',pub.year,"MW.pub.year=this.value",'70px')}
+      ${fld('Edition',pub.edition,"MW.pub.edition=this.value",'90px')}</div>
+    <label>Original imprint (early-modern / EEBO — kept verbatim)</label>
+    <input style="width:100%" value="${esc(pub.imprint||'')}" onchange="MW.pub.imprint=this.value">
+    <div class="row">
+      <div class="fieldcol"><label>Source status</label>
+        <select onchange="MW.source_status=this.value;renderWorkModal()">
+          <option value="published" ${MW.source_status==='published'?'selected':''}>Published — citable</option>
+          <option value="eebo" ${MW.source_status==='eebo'?'selected':''}>EEBO original scan</option>
+          <option value="surrogate" ${MW.source_status==='surrogate'?'selected':''}>Surrogate (OCR PDF etc.) — cite original</option>
+        </select></div>
+      ${MW.source_status==='surrogate'?`<div class="fieldcol" style="flex:1"><label>Original work (link for citation)</label>
+        <select onchange="MW.original_work_id=this.value||null"><option value="">— none yet —</option>${origOpts}</select></div>`:''}
+    </div>
+    ${MW.source_status==='surrogate'?'<div class="warn">⚠️ Quotes from this work will carry a "cite original" reminder.</div>':''}`;
+  }
   $('modal').innerHTML=`
   <h3>${MW.id?'Edit work':'New work'}</h3>
-  <label>Citation parser — paste a full citation and I'll split it into fields</label>
-  <div class="row"><input id="cp-in" style="flex:1" placeholder='e.g. John Owen, Overcoming Sin and Temptation (Wheaton: Crossway, 2006)'>
-  <button class="btn sm sec" onclick="parseCitation()">Parse</button>
-  <button class="btn sm sec" onclick="lookupOnline()">🔎 Look up online</button>
+  <div class="row" style="gap:5px;margin-bottom:6px">${typeSeg}</div>
+  <label>Find it — paste a full citation, a title, or a DOI</label>
+  <div class="row"><input id="cp-in" style="flex:1" placeholder='e.g. Fulcher, "Puritans and the Passions," Journal of the History of the Behavioral Sciences 9:123-39'
+     onkeydown="if(event.key==='Enter'){event.preventDefault();parseCitation()}">
+  <button class="btn sm sec" onclick="parseCitation()" title="Split a pasted citation into the fields below, and look for matches online">Parse</button>
+  <button class="btn sm sec" onclick="lookupOnline()" title="Search Crossref, Open Library and Google Books using the title and author below">🔎 Look up online</button>
   <button class="btn sm sec" onclick="fetchUrlMeta()">🔗 From URL</button></div>
-  <div id="cp-sugg"></div>
+  <div id="cp-sugg">${lookupHtml()}</div>
   <label>Title</label><input id="mw-title" style="width:100%" value="${esc(MW.title)}" onchange="MW.title=this.value">
   ${roleRow('author',MW._authors)}${roleRow('editor',MW._editors)}${roleRow('translator',MW._translators)}
-  <div class="row">
-    <div class="fieldcol"><label>Place</label><input style="width:120px" value="${esc(pub.place||'')}" onchange="MW.pub.place=this.value"></div>
-    <div class="fieldcol"><label>Publisher</label><input style="width:180px" value="${esc(pub.publisher||'')}" onchange="MW.pub.publisher=this.value"></div>
-    <div class="fieldcol"><label>Year</label><input style="width:70px" value="${esc(pub.year||'')}" onchange="MW.pub.year=this.value"></div>
-    <div class="fieldcol"><label>Edition</label><input style="width:90px" value="${esc(pub.edition||'')}" onchange="MW.pub.edition=this.value"></div>
-  </div>
-  <label>Original imprint (early-modern / EEBO — kept verbatim)</label>
-  <input style="width:100%" value="${esc(pub.imprint||'')}" onchange="MW.pub.imprint=this.value">
-  <div class="row">
-    <div class="fieldcol"><label>Source status</label>
-      <select onchange="MW.source_status=this.value;renderWorkModal()">
-        <option value="published" ${MW.source_status==='published'?'selected':''}>Published — citable</option>
-        <option value="eebo" ${MW.source_status==='eebo'?'selected':''}>EEBO original scan</option>
-        <option value="surrogate" ${MW.source_status==='surrogate'?'selected':''}>Surrogate (OCR PDF etc.) — cite original</option>
-      </select></div>
-    ${MW.source_status==='surrogate'?`<div class="fieldcol" style="flex:1"><label>Original work (link for citation)</label>
-      <select onchange="MW.original_work_id=this.value||null"><option value="">— none yet —</option>${origOpts}</select></div>`:''}
-  </div>
-  ${MW.source_status==='surrogate'?'<div class="warn">⚠️ Quotes from this work will carry a "cite original" reminder.</div>':''}
+  ${newPeople.length&&HAS_NAME_COLS?`<div class="newppl"><div class="small muted" style="margin-bottom:4px">New ${newPeople.length===1?'person':'people'} — check the name parts; they drive how citations invert and sort the name.</div>
+    ${newPeople.map(n=>{const s=MW._splits[n]||splitName(n);const a=esc(n).replace(/'/g,"\\'");
+      return `<div class="row" style="margin:3px 0">
+        <input style="width:110px" placeholder="First" value="${esc(s.first)}" onchange="setSplit('${a}','first',this.value)">
+        <input style="width:110px" placeholder="Middle" value="${esc(s.middle)}" onchange="setSplit('${a}','middle',this.value)">
+        <input style="width:130px" placeholder="Last" value="${esc(s.last)}" onchange="setSplit('${a}','last',this.value)">
+        <span class="small muted">sorts as ${esc(composeName(s).sort_name)}</span></div>`}).join('')}</div>`:''}
+  ${pubFields}
   <label>URLs (one per line)</label>
   <textarea style="width:100%" rows="2" onchange="MW.urls=this.value.split('\\n').map(s=>s.trim()).filter(Boolean)">${esc((MW.urls||[]).join('\n'))}</textarea>
   <label>Notes about this work</label>
@@ -1221,15 +1480,160 @@ function renderWorkModal(){
   $('modal-bg').classList.remove('hidden');
   ['author','editor','translator'].forEach(role=>{
     const el=$('role-in-'+role);if(!el)return;
-    makeAutocomplete(el,()=>DB.people.map(p=>p.name),{onEnter:v=>{addRole(role,v)}});
+    makeAutocomplete(el,()=>DB.people.map(p=>p.name),{onEnter:v=>{addRole(role,v)},onPick:v=>{addRole(role,v)}});
   });
+  if(refocus&&$(refocus))$(refocus).focus();
 }
-function addRole(role,name){name=(name||'').trim();if(!name)return;MW['_'+role+'s'].push(name);renderWorkModal()}
-function closeModal(){$('modal-bg').classList.add('hidden')}
-function parseCitation(){
+function addRole(role,name){name=(name||'').trim();if(!name)return;const el=$('role-in-'+role);if(el)el.value='';
+  if(!MW['_'+role+'s'].includes(name))MW['_'+role+'s'].push(name);renderWorkModal();const e2=$('role-in-'+role);if(e2)e2.focus()}
+function closeModal(){closeAllAC();$('modal-bg').classList.add('hidden')}
+
+/* ---- online lookup: Crossref (articles, academic books — and free-text citation matching),
+   Open Library (with a per-edition picker) and Google Books ---- */
+let LOOK=null;   // {items:[...], editionsOf: index|null, editions:[...], msg}
+function fetchJSON(url,ms){
+  const ac=new AbortController();const t=setTimeout(()=>ac.abort(),ms||9000);
+  return fetch(url,{signal:ac.signal}).then(r=>{clearTimeout(t);if(!r.ok)throw new Error(r.status);return r.json()});
+}
+function crPerson(a){
+  const g=(a.given||'').trim().split(/\s+/).filter(Boolean);
+  return{first:g[0]||'',middle:g.slice(1).join(' '),last:(a.family||a.name||'').trim()};
+}
+function crItem(it){
+  const kind=it.type==='journal-article'?'article':(/book|monograph/.test(it.type||'')?(it.type==='book-chapter'?'chapter':'book'):'other');
+  const dp=((it.issued||it['published-print']||it['published-online']||{})['date-parts']||[[]])[0]||[];
+  return{src:'Crossref',kind,title:stripHtml((it.title||[''])[0]+(it.subtitle&&it.subtitle[0]?': '+it.subtitle[0]:'')),
+    people:(it.author||[]).map(crPerson),editors:(it.editor||[]).map(crPerson),
+    journal:stripHtml((it['container-title']||[''])[0]),volume:it.volume||'',issue:it.issue||'',pages:it.page||'',
+    year:dp[0]?String(dp[0]):'',doi:it.DOI||'',publisher:it.publisher||'',place:it['publisher-location']||''};
+}
+async function crossrefSearch(q,rows){
+  const j=await fetchJSON('https://api.crossref.org/works?rows='+(rows||5)+'&select=DOI,title,subtitle,author,editor,container-title,volume,issue,page,issued,published-print,published-online,type,publisher,publisher-location&query.bibliographic='+encodeURIComponent(q));
+  return((j.message&&j.message.items)||[]).filter(it=>(it.title||[]).length).map(crItem).filter(d=>d.kind!=='other');
+}
+async function lookupOnline(extraQ){
+  const title=(MW.title||'').trim(), author=(MW._authors[0]||'').trim();
+  const typed=($('cp-in')&&$('cp-in').value.trim())||'';
+  const q=extraQ||[title,author].filter(Boolean).join(' ')||typed;
+  if(!q){toast('Enter a title (or paste a citation) first');return}
+  LOOK={items:[],msg:'Searching Crossref, Open Library and Google Books…'};renderLook();
+  const items=[],failed=[];
+  const cr=crossrefSearch(q,5).then(r=>items.push(...r)).catch(()=>failed.push('Crossref'));
+  const ol=fetchJSON('https://openlibrary.org/search.json?limit=5&fields=key,title,subtitle,author_name,first_publish_year,edition_count,publisher,publish_place&q='+encodeURIComponent(q)).then(j=>{
+    (j.docs||[]).forEach(d=>items.push({src:'Open Library',kind:'book',title:d.title+(d.subtitle?': '+d.subtitle:''),people:(d.author_name||[]).slice(0,4).map(splitName),
+      year:d.first_publish_year?String(d.first_publish_year):'',firstPub:true,publisher:(d.publisher||[])[0]||'',place:(d.publish_place||[])[0]||'',olKey:d.key,editionCount:d.edition_count||0}))}).catch(()=>failed.push('Open Library'));
+  const gq=title?('intitle:'+title+(author?' inauthor:'+author.split(/\s+/).pop():'')):q;
+  const gb=fetchJSON('https://www.googleapis.com/books/v1/volumes?maxResults=5&q='+encodeURIComponent(gq)).then(j=>{
+    (j.items||[]).forEach(it=>{const v=it.volumeInfo||{};items.push({src:'Google Books',kind:'book',title:v.title+(v.subtitle?': '+v.subtitle:''),
+      people:(v.authors||[]).map(splitName),publisher:v.publisher||'',year:(v.publishedDate||'').slice(0,4)})})}).catch(()=>failed.push('Google Books'));
+  await Promise.allSettled([cr,ol,gb]);
+  // books first when you're entering a book, articles first when it's an article
+  const want=(MW.pub.type==='article')?'article':'book';
+  items.sort((a,b)=>(b.kind===want)-(a.kind===want));
+  const fnote=failed.length?failed.join(' and ')+' did not respond':'';
+  LOOK={items,note:fnote,msg:items.length?'':('No matches found. Try fewer words, or just the title.'+(fnote?' ('+fnote+'.)':''))};
+  renderLook();
+}
+function lookItemLine(d){
+  const who=(d.people||[]).map(p=>composeName(p).name).join(', ');
+  const bits=d.kind==='article'?[d.journal,d.volume&&('vol. '+d.volume),d.issue&&('no. '+d.issue),d.year,d.pages&&('pp. '+d.pages)]
+            :[d.place,d.publisher,d.year&&(d.firstPub?'first pub. '+d.year:d.year)];
+  return `<b>${esc(d.title)}</b>${who?' — '+esc(who):''}<br><span class="muted">${esc(bits.filter(Boolean).join(' · '))} · ${d.kind==='article'?'article':d.kind==='chapter'?'book chapter':'book'} via ${d.src}</span>`;
+}
+function lookupHtml(){
+  if(!LOOK)return'';
+  if(LOOK.msg&&!LOOK.items.length&&!LOOK.editions)return`<div class="sugg" style="cursor:default">${esc(LOOK.msg)}</div>`;
+  if(LOOK.editions){
+    const parent=LOOK.items[LOOK.editionsOf];
+    return `<div class="looktop"><button class="btn sm gho" onclick="LOOK.editions=null;renderLook()">‹ Back to results</button>
+      <span class="small muted">${LOOK.editions.length} edition${LOOK.editions.length===1?'':'s'} of <b>${esc(parent.title)}</b> — pick the one in your hands</span></div>
+      <div class="lookscroll">${LOOK.editions.map((e,i)=>`<div class="sugg" onclick="applyEdition(${i})"><b>${esc([e.place,e.publisher,e.year].filter(Boolean).join(' · ')||'(no imprint recorded)')}</b>${e.edition?' — '+esc(e.edition):''}<br>
+        <span class="muted">${esc(e.title)}${e.pages?' · '+e.pages+' pp.':''}${e.isbn?' · ISBN '+esc(e.isbn):''}</span></div>`).join('')}</div>`;
+  }
+  return `<div class="looktop"><span class="small muted">${LOOK.items.length} match${LOOK.items.length===1?'':'es'} — click one to fill the fields${LOOK.note?' · '+esc(LOOK.note):''}</span>
+      <span style="flex:1"></span><button class="btn sm gho" onclick="LOOK=null;renderLook()">Close</button></div>
+    <div class="lookscroll">${LOOK.items.map((d,i)=>`<div class="sugg" onclick="applyLook(${i})">${lookItemLine(d)}
+      ${d.olKey&&d.editionCount>1?`<div style="margin-top:5px"><button class="btn sm sec" onclick="event.stopPropagation();loadEditions(${i})">Choose edition (${d.editionCount}) ›</button></div>`:''}</div>`).join('')}</div>`;
+}
+function renderLook(){const el=$('cp-sugg');if(el)el.innerHTML=lookupHtml()}
+function setPeople(role,people){
+  if(!people||!people.length)return;
+  MW['_'+role+'s']=people.slice(0,6).map(p=>{const c=composeName(p);MW._splits[c.name]=p;return c.name}).filter(Boolean);
+}
+function applyLook(i){
+  const d=LOOK.items[i];if(!d)return;
+  if(d.title)MW.title=d.title;
+  setPeople('author',d.people);if(!(d.people||[]).length)setPeople('editor',d.editors);
+  if(d.kind==='article'){
+    MW.pub.type='article';
+    Object.assign(MW.pub,{journal:d.journal||MW.pub.journal,volume:d.volume,issue:d.issue,pages:d.pages,year:d.year||MW.pub.year,doi:d.doi});
+  }else{
+    MW.pub.type='book';
+    if(d.kind==='chapter'&&d.journal){MW.title=d.journal;toast('That is a chapter — set "'+d.title+'" as the cited part title on your note')}
+    if(d.publisher)MW.pub.publisher=d.publisher;
+    if(d.place)MW.pub.place=d.place;
+    if(d.year&&!d.firstPub)MW.pub.year=d.year;
+    else if(d.year&&!MW.pub.year)MW.pub.year=d.year;
+    if(d.doi)MW.pub.doi=d.doi;
+  }
+  LOOK.note=d.firstPub&&d.editionCount>1?'year shown is first publication — choose an edition for yours':'';
+  renderWorkModal();
+}
+async function loadEditions(i){
+  const d=LOOK.items[i];if(!d||!d.olKey)return;
+  LOOK.msg='Loading editions…';renderLook();
+  try{
+    const j=await fetchJSON('https://openlibrary.org'+d.olKey+'/editions.json?limit=60');
+    const eds=(j.entries||[]).map(e=>({title:(e.title||d.title)+(e.subtitle?': '+e.subtitle:''),publisher:(e.publishers||[])[0]||'',
+      place:(e.publish_places||[])[0]||'',year:((e.publish_date||'').match(/\d{4}/)||[''])[0],edition:e.edition_name||'',
+      pages:e.number_of_pages||'',isbn:(e.isbn_13||e.isbn_10||[])[0]||''}));
+    eds.sort((a,b)=>(b.year||'0').localeCompare(a.year||'0'));
+    LOOK.editionsOf=i;LOOK.editions=eds;LOOK.msg='';
+    if(!eds.length){LOOK.editions=null;toast('No edition details recorded for that work')}
+  }catch(e){LOOK.msg='';toast('Could not load editions — '+e.message)}
+  renderLook();
+}
+function applyEdition(j){
+  const d=LOOK.items[LOOK.editionsOf],e=LOOK.editions[j];if(!d||!e)return;
+  MW.pub.type='book';
+  MW.title=e.title||d.title;
+  setPeople('author',d.people);
+  MW.pub.publisher=e.publisher||'';MW.pub.place=e.place||'';MW.pub.year=e.year||'';
+  if(e.edition)MW.pub.edition=e.edition;
+  LOOK.editions=null;LOOK.note='edition applied';
+  renderWorkModal();
+}
+
+/* ---- Parse: local split of a pasted citation, then Crossref's citation matcher for a second
+   opinion — the local heuristics alone "rarely got it right". ---- */
+function parseArticleCitation(str){
+  const m=str.match(/^(?:(.+?),\s*)?["'\u201c\u2018](.+?)[,.]?["'\u201d\u2019]\s*,?\s*(?:in\s+)?(.+?)\s*,?\s*(?:vol\.?\s*)?(\d+)\s*(?:,?\s*(?:no\.?|issue)\s*(\d+)|\((\d{1,3})\))?\s*(?:\((\d{4})\))?\s*[:,]\s*(?:pp?\.\s*)?(\d+(?:\s*[-\u2013]\s*\d+)?)/i);
+  if(!m)return false;
+  MW.pub.type='article';
+  MW.title=m[2].trim();
+  if(m[1]&&!MW._authors.length)m[1].split(/\s*(?:,|\band\b|&)\s*/).filter(x=>x.trim().length>1).forEach(a=>MW._authors.push(normalizePersonName(a).name));
+  Object.assign(MW.pub,{journal:m[3].replace(/[,.]$/,'').trim(),volume:m[4],issue:m[5]||m[6]||'',pages:m[8].replace(/\s/g,'')});
+  if(m[7])MW.pub.year=m[7];else{const y=str.match(/\b(1[5-9]\d\d|20\d\d)\b/);if(y)MW.pub.year=y[1]}
+  return true;
+}
+async function parseCitation(){
   const raw=$('cp-in').value.trim();if(!raw)return;
+  const doi=(raw.match(/\b10\.\d{4,9}\/[^\s"'<>]+/)||[])[0];
+  if(doi){await fetchDoi(doi.replace(/[.,;)\]]+$/,''));return}
   (raw.match(/https?:\/\/[^\s"']+/g)||[]).forEach(u=>{u=u.replace(/[.,;)\]]+$/,'');if(!MW.urls.includes(u))MW.urls.push(u)});
   let str=raw.replace(/https?:\/\/[^\s"']+/g,' ');
+  if(!parseArticleCitation(str.replace(/\s+/g,' ').trim()))parseBookCitation(raw,str);
+  renderWorkModal();
+  $('cp-in').value=raw;
+  // second opinion from Crossref's free-text citation matcher
+  LOOK={items:[],msg:'Parsed into the fields below — checking Crossref for a matching record…'};renderLook();
+  try{
+    const items=await crossrefSearch(raw,4);
+    LOOK={items,note:'closest Crossref matches to what you pasted',msg:items.length?'':'Parsed into the fields below. Nothing matched in Crossref — 🔎 tries the book catalogues too.'};
+  }catch(e){LOOK={items:[],msg:'Parsed into the fields below (Crossref unreachable).'}}
+  renderLook();
+}
+function parseBookCitation(raw,str){
   str=str.replace(/,?\s*(?:d|b|ca?|fl)\.\s*1[4-9]\d\d/gi,'');
   str=str.replace(/\(\s*1[4-9]\d\d\s*[\u2013\u2014-]\s*(?:1[4-9]\d\d|\d{2})\s*\)/g,'');
   str=str.replace(/\s+/g,' ').trim();
@@ -1255,39 +1659,22 @@ function parseCitation(){
     if(best&&best.length>=8)MW.title=best.replace(/[.,]$/,'').trim();
   }
   if(/printed|imprinted/i.test(raw)&&!MW.pub.publisher&&!MW.pub.imprint)MW.pub.imprint=raw.replace(/https?:\/\/[^\s"']+/g,'').trim();
-  renderWorkModal();
-  $('cp-sugg').innerHTML='<div class="sugg" style="cursor:default">Parsed — review the fields below, then use 🔎 to verify online if needed.</div>';
 }
-async function lookupOnline(){
-  const title=(MW.title||'').trim(), author=(MW._authors[0]||'').trim();
-  const q=[title,author].filter(Boolean).join(' ')||$('cp-in').value.trim();
-  if(!q){toast('Enter a title first');return}
-  $('cp-sugg').innerHTML='<div class="sugg" style="cursor:default">Searching Open Library and Google Books…</div>';
-  const suggs=[];
-  const ol=fetch('https://openlibrary.org/search.json?limit=4&q='+encodeURIComponent(q)).then(r=>r.json()).then(j=>{
-    (j.docs||[]).forEach(d=>suggs.push({src:'Open Library',title:d.title||'',subtitle:'',authors:d.author_name||[],publisher:(d.publisher||[])[0]||'',year:d.first_publish_year?String(d.first_publish_year):''}))});
-  const gq=title?('intitle:'+title+(author?' inauthor:'+author:'')):q;
-  const gb=fetch('https://www.googleapis.com/books/v1/volumes?maxResults=4&q='+encodeURIComponent(gq)).then(r=>r.json()).then(j=>{
-    (j.items||[]).forEach(it=>{const v=it.volumeInfo||{};suggs.push({src:'Google Books',title:v.title||'',subtitle:v.subtitle||'',authors:v.authors||[],publisher:v.publisher||'',year:(v.publishedDate||'').slice(0,4)})})});
-  await Promise.allSettled([ol,gb]);
-  if(!suggs.length){$('cp-sugg').innerHTML='<div class="sugg" style="cursor:default">No matches in either source.</div>';return}
-  window._suggs=suggs;
-  $('cp-sugg').innerHTML=suggs.map((d,i)=>`<div class="sugg" onclick="applySugg(${i})">
-    <b>${esc(d.title)}${d.subtitle?': '+esc(d.subtitle):''}</b> — ${esc(d.authors.join(', '))}<br>
-    <span class="muted">${esc(d.publisher)} ${esc(d.year)} · via ${d.src}</span></div>`).join('');
-}
-function applySugg(i){
-  const d=window._suggs[i];
-  if(d.title)MW.title=d.title+(d.subtitle?': '+d.subtitle:'');
-  if(d.authors&&d.authors.length)MW._authors=[...new Set(d.authors.slice(0,3))];
-  if(d.publisher)MW.pub.publisher=d.publisher;
-  if(d.year)MW.pub.year=d.year;
-  renderWorkModal();
+async function fetchDoi(doi){
+  LOOK={items:[],msg:'Looking up DOI '+doi+'…'};renderLook();
+  try{
+    const j=await fetchJSON('https://api.crossref.org/works/'+encodeURIComponent(doi));
+    LOOK={items:[crItem(j.message)],note:'DOI record'};applyLook(0);
+    if(!MW.urls.includes('https://doi.org/'+doi))MW.urls.push('https://doi.org/'+doi);
+    renderWorkModal();
+  }catch(e){LOOK={items:[],msg:'No Crossref record for that DOI.'};renderLook()}
 }
 async function fetchUrlMeta(){
-  let url=(MW.urls&&MW.urls[0])||prompt('Paste the URL to read metadata from:');
+  let url=(MW.urls&&MW.urls[0])||(($('cp-in').value.match(/https?:\/\/\S+/)||[])[0])||prompt('Paste the URL to read metadata from:');
   if(!url)return;
   if(!/^https?:\/\//.test(url))url='https://'+url;
+  const doi=(url.match(/\b10\.\d{4,9}\/[^\s?#"'<>]+/)||[])[0];
+  if(doi){await fetchDoi(decodeURIComponent(doi));return}
   $('cp-sugg').innerHTML='<div class="sugg" style="cursor:default">Reading page…</div>';
   let html=null;
   try{const r=await fetch(url);if(r.ok)html=await r.text()}catch(e){}
@@ -1295,46 +1682,25 @@ async function fetchUrlMeta(){
   if(!html){$('cp-sugg').innerHTML='<div class="sugg" style="cursor:default">That site blocks cross-site reading — nothing retrieved. Try the 🔎 lookup instead.</div>';return}
   const doc=new DOMParser().parseFromString(html,'text/html');
   const meta=n=>{const el=doc.querySelector('meta[name="'+n+'"],meta[property="'+n+'"]');return(el&&el.getAttribute('content'))||''};
+  const metas=n=>[...doc.querySelectorAll('meta[name="'+n+'"]')].map(e=>e.getAttribute('content')).filter(Boolean);
+  const pageDoi=meta('citation_doi')||meta('dc.identifier')||meta('DC.Identifier');
+  if(/^(doi:)?10\.\d{4,9}\//i.test(pageDoi)){await fetchDoi(pageDoi.replace(/^doi:/i,''));if(!MW.urls.includes(url))MW.urls.push(url);renderWorkModal();return}
   const found=[];
   const t=meta('citation_title')||meta('og:title')||(doc.querySelector('title')?doc.querySelector('title').textContent.trim():'');
-  const a=meta('citation_author')||meta('author');
+  const authors=metas('citation_author');if(!authors.length&&meta('author'))authors.push(meta('author'));
+  const jr=meta('citation_journal_title');
   const pub=meta('citation_publisher')||meta('DC.publisher')||meta('og:site_name');
-  const yr=(meta('citation_publication_date')||meta('citation_date')||meta('DC.date')||'').slice(0,4);
+  const yr=(meta('citation_publication_date')||meta('citation_date')||meta('DC.date')||meta('article:published_time')||'').slice(0,4);
   if(t&&!MW.title){MW.title=t;found.push('title')}
-  if(a&&!MW._authors.length){MW._authors.push(a);found.push('author')}
-  if(pub&&!MW.pub.publisher){MW.pub.publisher=pub;found.push('publisher')}
+  if(authors.length&&!MW._authors.length){authors.slice(0,6).forEach(a=>MW._authors.push(normalizePersonName(a).name));found.push('author')}
+  if(jr){MW.pub.type='article';MW.pub.journal=jr;MW.pub.volume=meta('citation_volume');MW.pub.issue=meta('citation_issue');
+    const fp=meta('citation_firstpage'),lp=meta('citation_lastpage');if(fp)MW.pub.pages=fp+(lp?'-'+lp:'');found.push('journal details')}
+  else if(!MW.id&&MW.pub.type==='book'&&!meta('citation_isbn')){MW.pub.type='web';if(pub&&!MW.pub.site){MW.pub.site=pub;found.push('site name')}}
+  else if(pub&&!MW.pub.publisher){MW.pub.publisher=pub;found.push('publisher')}
   if(/^\d{4}$/.test(yr)&&!MW.pub.year){MW.pub.year=yr;found.push('year')}
   if(!MW.urls.includes(url))MW.urls.push(url);
+  LOOK={items:[],msg:found.length?'Filled empty fields: '+found.join(', ')+'. Existing values left untouched.':'Page read, but no usable metadata found.'};
   renderWorkModal();
-  $('cp-sugg').innerHTML='<div class="sugg" style="cursor:default">'+(found.length?'Filled empty fields: '+found.join(', ')+'. Existing values left untouched.':'Page read, but no usable metadata found.')+'</div>';
-}
-/* A name may arrive as "First Last" (typed) or "Last, First" (from an online lookup, a
-   pasted citation, or habit). Assuming the former and moving the last word to the front turns
-   "Dixon, Thomas" into sort_name "Thomas, Dixon," — which files the author under T and makes
-   them look missing from the Authors list. Detect the comma form and handle both. */
-function normalizePersonName(raw){
-  const t=String(raw||'').trim().replace(/\s+/g,' ').replace(/,\s*$/,'');
-  if(!t)return{name:'',sort_name:''};
-  if(t.includes(',')){
-    const i=t.indexOf(',');
-    const last=t.slice(0,i).trim(), first=t.slice(i+1).trim();
-    return{name:(first?first+' ':'')+last, sort_name:last+(first?', '+first:'')};
-  }
-  const parts=t.split(' ');
-  if(parts.length===1)return{name:t,sort_name:t};
-  return{name:t, sort_name:parts[parts.length-1]+', '+parts.slice(0,-1).join(' ')};
-}
-async function ensurePerson(name){
-  const nm=normalizePersonName(name);
-  const k=nm.name.toLowerCase();
-  /* match on either stored form, so "Dixon, Thomas" finds an existing "Thomas Dixon" */
-  let p=DB.people.find(x=>(x.name||'').toLowerCase()===k
-        ||(x.sort_name||'').toLowerCase()===nm.sort_name.toLowerCase());
-  if(p)return p.id;
-  const{data,error}=await sb.from('people').insert({name:nm.name,sort_name:nm.sort_name,urls:[],tags:[]}).select().single();
-  if(error){toast(error.message);throw error}
-  DB.people.push(data);DB.people.sort((a,b)=>(a.sort_name||a.name).localeCompare(b.sort_name||b.name));
-  return data.id;
 }
 /* Typed text in the author/editor/translator boxes only became a chip on Enter. Clicking
    "Save work" straight afterwards threw it away silently — which is how works ended up in the
@@ -1345,7 +1711,7 @@ function commitPendingRoles(){
   let added=false;
   ['author','editor','translator'].forEach(role=>{
     const el=$('role-in-'+role);
-    if(el&&el.value.trim()){MW['_'+role+'s'].push(el.value.trim());el.value='';added=true}
+    if(el&&el.value.trim()){const v=el.value.trim();if(!MW['_'+role+'s'].includes(v))MW['_'+role+'s'].push(v);el.value='';added=true}
   });
   return added;
 }
@@ -1356,7 +1722,8 @@ function commitRolesOnBlur(){
   if(commitPendingRoles())renderWorkModal();
 }
 async function saveWork(){
-  commitPendingRoles();
+  commitPendingRoles();closeAllAC();
+  const te=$('mw-title');if(te)MW.title=te.value;
   if(!MW.title.trim()){toast('Title required');return}
   const rec={title:MW.title.trim(),pub:MW.pub,source_status:MW.source_status,original_work_id:MW.original_work_id,review_flag:MW.review_flag||'',urls:MW.urls,tags:MW.tags,notes:MW.notes};
   let wid=MW.id;
@@ -1367,11 +1734,14 @@ async function saveWork(){
   DB.wc=DB.wc.filter(c=>c.work_id!==wid);
   const rows=[];
   for(const[role,arr]of[['author',MW._authors],['editor',MW._editors],['translator',MW._translators]])
-    for(let i=0;i<arr.length;i++)rows.push({work_id:wid,person_id:await ensurePerson(arr[i]),role,position:i});
+    for(let i=0;i<arr.length;i++)rows.push({work_id:wid,person_id:await ensurePerson(arr[i],MW._splits[arr[i]]),role,position:i});
   if(rows.length){const{data,error}=await sb.from('work_contributors').insert(rows).select();if(error){toast(error.message);return}DB.wc.push(...data)}
   if(KINDLE_IMPORT){const ki=KINDLE_IMPORT;KINDLE_IMPORT=null;await finishKindleImport(wid,ki);return}
-  if(CUR)CUR.work_id=wid;
-  closeModal();toast('Work saved');refreshActiveView();
+  /* Only a NEW work created from the note editor is attached to the open note. Previously any
+     save — editing a work from the Works tab, or via bulk "edit shared work" — reassigned
+     whichever note happened to be open, and never saved that change either. */
+  if(CUR&&!MW.id&&activeView()==='notes'){CUR.work_id=wid;scheduleSave()}
+  MW=null;closeModal();toast('Work saved');refreshActiveView();
 }
 async function deleteWork(){
   const n=DB.notes.filter(x=>x.work_id===MW.id).length;
@@ -1578,7 +1948,7 @@ function renderNotes(){
      a panel mid-sentence threw the text away. Identity check matters: after openNote()
      CUR is a different object and the stale DOM must NOT be copied into it. */
   if(PANE_OWNER===CUR)syncPanes();
-  saveLibState();
+  saveLibState();closeAllAC();
   const host=$('view-notes');if(!host)return;
   const _lr=$('lib-results');const _scroll=_lr?_lr.scrollTop:0;   // survive the rebuild
   host.innerHTML=
@@ -1592,13 +1962,13 @@ function renderNotes(){
   $('rte-q').innerHTML=CUR.quote_html||'';
   $('rte-n').innerHTML=CUR.note_html||'';
   ['q','n'].forEach(k=>{const el=$('rte-'+k);if(!el)return;
-    el.addEventListener('input',()=>{dirty=true;scheduleSave()});
+    el.addEventListener('input',()=>{dirty=true;scheduleSave();clearTimeout(el._hh);el._hh=setTimeout(paneSearchHits,250)});
     el.addEventListener('paste',sanitizePaste);
     el.addEventListener('keydown',rteShortcut)});
   PANE_OWNER=CUR;
+  paneSearchHits();
   renderNotesList(_scroll);
-  if(!UI.detHidden){renderPurposeFields();initScriptureSelects();
-    const ti=$('tag-in');if(ti)makeAutocomplete(ti,allTags,{onEnter:v=>{ti.value=v;addTagFromInput()}})}
+  if(!UI.detHidden)wireDetPanel();
   const lt=$('lib-tag-in');if(lt)makeAutocomplete(lt,allTags,{onEnter:v=>{libTag(v);lt.value=''}});
   updateSaveStatus();
 }
@@ -1607,12 +1977,13 @@ function toolRowHtml(){
   const rs=libResults(),i=curIndex(rs),fc=activeFilterCount();
   return `<div class="popwrap"><div class="toolrow">
     <button class="btn sm gho backbtn" onclick="showList()">‹ List</button>
+    <button class="btn sm sec ptog paneltog ${UI.listHidden?'':'on'}" onclick="toggleList()" title="${UI.listHidden?'Show':'Hide'} the results list">☰ Results</button>
     <span class="pager" title="Step through results — arrow keys, or Option+arrow while typing">
       <button onclick="stepNote(-1)" title="Previous result (← or ⌥←)">‹</button>
       <span class="pos">${i>=0?(i+1):'–'} / ${rs.length}</span>
       <button onclick="stepNote(1)" title="Next result (→ or ⌥→)">›</button>
     </span>
-    <input id="lib-q" placeholder="Search…" value="${esc(LIB.q)}" style="flex:1;min-width:90px;max-width:280px" oninput="LIB.q=this.value;renderNotesList();refreshPager()">
+    <input id="lib-q" placeholder="Search…" value="${esc(LIB.q)}" style="flex:1;min-width:90px;max-width:280px" oninput="LIB.q=this.value;renderNotesList();refreshPager();paneSearchHits()">
     <button class="btn sm sec" onclick="toggleFilters()">Filters${fc?' <span class="badge">'+fc+'</span>':''}</button>
     ${fc?'<button class="btn sm gho" onclick="clearLib()">Clear</button>':''}
     <select onchange="LIB.sort=this.value;renderNotes()" title="Sort order">
@@ -1620,6 +1991,7 @@ function toolRowHtml(){
     </select>
     <span style="flex:1"></span>
     <button class="btn sm ${(UI.listHidden&&UI.detHidden)?'':'gho'}" onclick="toggleFocus()" title="Collapse both side panels">${(UI.listHidden&&UI.detHidden)?'Exit focus':'Focus'}</button>
+    <button class="btn sm sec ptog paneltog ${UI.detHidden?'':'on'}" onclick="toggleDet()" title="${UI.detHidden?'Show':'Hide'} note details">Details ☰</button>
   </div>${filtersPopHtml()}</div>`;
 }
 
@@ -1677,7 +2049,7 @@ function listColHtml(){
       <span class="small muted" id="lib-count"></span>
       <span style="flex:1"></span>
       <button class="btn sm ${LIB.selMode?'':'gho'}" onclick="toggleSelMode()" title="Tick several results to copy or bulk-edit them">${LIB.selMode?'Done selecting':'☑ Select'}</button>
-      <button class="btn sm gho" onclick="toggleList()" title="Collapse the list">«</button>
+      <button class="btn sm sec" onclick="toggleList()" title="Hide the results list">‹ Hide</button>
     </div>
     <div class="listhead" style="border-top:none">
       <button class="btn sm sec" onclick="exportNotes('quote')" title="Copy quote + citation">Quote${LIB.sel.size?' ('+LIB.sel.size+')':''}</button>
@@ -1705,7 +2077,7 @@ function renderNotesList(keepScroll){
     const key=w?w.id:'none';
     if(key!==lastW){
       const a=w?(contribs(w.id,'author')[0]||contribs(w.id,'editor')[0]):null;
-      out+=`<div class="groupbar">${w?esc((a?a.name.split(/\s+/).pop()+' · ':'')+w.title):'No work'}</div>`;
+      out+=`<div class="groupbar">${w?esc((a?lastName(a)+' · ':'')+w.title):'No work'}</div>`;
       lastW=key;
     }
     const loc=locatorStr(n.locators)||'—';
@@ -1741,6 +2113,58 @@ function factsStripHtml(){
   </div>`;
 }
 
+/* Details panel, v2.6: sections reordered (Tags moved up, Purpose last — its fields are the
+   tallest block and used to push Tags off the bottom of the screen) and every section collapses.
+   Collapsed shows only what's filled in; expanded shows the editing controls. Open/closed state
+   lives in UI.open and survives re-renders — previously every re-render snapped the editors
+   shut, and the Tags "+" opened a box below the visible area with nothing scrolling to it. */
+UI.open=Object.assign({cite:false,tags:false,loc:false,scr:false,purp:false},UI.open||{});
+function secHead(key,label,extra,btnTitle){
+  const open=UI.open[key];
+  return `<div class="bh" onclick="secToggle('${key}')">
+    <span class="chev">${open?'▾':'▸'}</span><span class="lbl">${label}</span>${extra||''}
+    <button class="add" onclick="event.stopPropagation();secToggle('${key}',${open?'false':'true'})" title="${open?'Done':btnTitle}">${open?'Done':(key==='cite'||key==='purp'?'✎':'+')}</button></div>`;
+}
+const SEC_FOCUS={tags:'tag-in',loc:'loc-val',scr:'scr-text'};
+function secToggle(key,force){
+  syncPanes();
+  UI.open[key]=(force===undefined)?!UI.open[key]:!!force;saveUI();
+  renderDetPanel();
+  if(UI.open[key]){
+    const blk=document.querySelector('.blk[data-sec="'+key+'"]');
+    if(blk)blk.scrollIntoView({block:'nearest',behavior:'smooth'});
+    const f=SEC_FOCUS[key]&&$(SEC_FOCUS[key]);if(f)setTimeout(()=>f.focus(),60);
+  }
+}
+/* Re-render just the panel (keeping its scroll position), not the whole notes view — so opening
+   a section doesn't rebuild the quote/notes panes under the cursor. */
+function renderDetPanel(){
+  const old=document.querySelector('.dpanel');if(!old){renderNotes();return}
+  closeAllAC();
+  const sc=old.querySelector('.dsc'),top=sc?sc.scrollTop:0;
+  old.outerHTML=detPanelHtml();
+  const sc2=document.querySelector('.dpanel .dsc');if(sc2)sc2.scrollTop=top;
+  wireDetPanel();
+}
+function wireDetPanel(){
+  renderPurposeFields();initScriptureSelects();
+  const ti=$('tag-in');if(ti)makeAutocomplete(ti,allTags,{onEnter:v=>{ti.value=v;addTagFromInput()},onPick:v=>{ti.value=v;addTagFromInput()}});
+}
+function purposeSummaryHtml(){
+  let h='';
+  (CUR.purposes||[]).forEach(pn=>{
+    const p=DB.purposes.find(x=>x.name===pn), vals=(CUR.purpose_values||{})[pn]||{};
+    const filled=((p&&p.fields)||[]).filter(f=>String(vals[f.key]||'').trim());
+    if(filled.length)h+=`<div class="pf-sum">${filled.map(f=>`<div><span>${esc(f.label)}</span><b>${esc(vals[f.key])}</b></div>`).join('')}</div>`;
+  });
+  return h;
+}
+// "ch. A Discourse of Delight in Prayer" recorded as a chapter locator can be promoted to the cited part title
+function chapterToPart(i){
+  const l=CUR.locators[i];if(!l)return;
+  CUR.chapter_title=l.value;CUR.locators.splice(i,1);
+  UI.open.cite=true;saveUI();renderDetPanel();refreshCite();toast('Now cited as a part title');
+}
 function detPanelHtml(){
   const w=W(CUR.work_id);
   const selAuthor=w?(contribs(w.id,'author')[0]||contribs(w.id,'editor')[0]||{}).id:CUR._authorSel;
@@ -1749,20 +2173,22 @@ function detPanelHtml(){
   const workOpts=worksOf.map(x=>`<option value="${x.id}" ${x.id===CUR.work_id?'selected':''}>${esc(x.title)}</option>`).join('');
   const c=w?citeWork(w,{form:'note',locators:CUR.locators,chapter_title:CUR.chapter_title,chapter_author:CUR.chapter_author}):{html:'<span class="muted">No work selected.</span>'};
   const surrogate=w&&w.source_status!=='published';
+  const O=UI.open, none='<span class="small muted">none</span>';
+  const nT=(CUR.tags||[]).length,nL=(CUR.locators||[]).length,nS=(CUR.scripture_refs||[]).length;
+  const cnt=(n,k)=>`<span class="badge gray" id="cnt-${k}" ${n?'':'style="display:none"'}>${n}</span>`;
+  const chapLocs=(CUR.locators||[]).map((l,i)=>({l,i})).filter(x=>x.l.type==='chapter'&&/[a-z]{3}/i.test(x.l.value));
   return `<div class="dpanel">
     <div class="dhd"><span class="t">Note details</span><span style="flex:1"></span>
-      <button class="btn sm gho" onclick="toggleDet()" title="Collapse">»</button></div>
+      <button class="btn sm sec" onclick="toggleDet()" title="Hide the details panel">Hide ›</button></div>
     <div class="dsc">
-      <div class="blk">
-        <div class="bh"><span class="lbl">Citation</span>
-          <button class="add" onclick="openWorkModal(null)" title="Create a new work (and its author)">+</button>
-          <button class="add" onclick="togCls('ed-citation')" title="Change author or work">✎</button></div>
+      <div class="blk${O.cite?' open':''}" data-sec="cite">
+        ${secHead('cite','Citation','','Change author, work or part title')}
         <div class="dcite" id="cite-preview">${c.html}${surrogate?' <span class="badge">'+esc(w.source_status)+'</span>':''}</div>
         <div class="vals" style="margin-top:8px">
           <button class="btn sm gho" onclick="copyCur('cite')">Cite</button>
           <button class="btn sm gho" onclick="copyCur('bib')">Biblio</button>
         </div>
-        <div class="edit" id="ed-citation">
+        ${O.cite?`<div class="edit open">
           <label>Author</label>
           <select id="ed-author" style="width:100%" onchange="pickAuthor(this.value)"><option value="">— all authors —</option>${authorOpts}</select>
           <label>Work</label>
@@ -1770,33 +2196,37 @@ function detPanelHtml(){
           <div class="row" style="margin-top:7px">
             <button class="btn sm sec" onclick="openWorkModal(null)">+ New work</button>
             ${w?`<button class="btn sm sec" onclick="openWorkModal('${w.id}')">Edit work</button>`:''}</div>
-          <label>Chapter (edited volumes)</label>
-          <input placeholder="Chapter title" value="${esc(CUR.chapter_title)}" onchange="CUR.chapter_title=this.value;refreshCite()" style="width:100%">
-          <input placeholder="Chapter author" value="${esc(CUR.chapter_author)}" onchange="CUR.chapter_author=this.value;refreshCite()" style="width:100%;margin-top:5px">
-        </div>
+          <label title="A discourse, treatise, sermon or essay inside the volume — it appears in the citation">Cited part title</label>
+          <input placeholder="e.g. A Discourse of Delight in Prayer" value="${esc(CUR.chapter_title)}" onchange="CUR.chapter_title=this.value;refreshCite()" style="width:100%">
+          <input placeholder="Part author (only if different from the volume)" value="${esc(CUR.chapter_author)}" onchange="CUR.chapter_author=this.value;refreshCite()" style="width:100%;margin-top:5px">
+          <p class="small muted" style="margin:5px 0 0">For a discourse or treatise within a collected works volume, or an essay in an edited book. Chapter <i>locators</i> are for your own navigation and are left out of citations.</p>
+        </div>`:''}
       </div>
-      <div class="blk">
-        <div class="bh"><span class="lbl">Locators</span><button class="add" onclick="togCls('ed-loc')" title="Add">+</button></div>
-        <div class="vals" id="loc-chips">${(CUR.locators||[]).map(locChip).join('')||'<span class="small muted">none</span>'}</div>
-        <div class="edit" id="ed-loc">
+      <div class="blk${O.tags?' open':''}" data-sec="tags">
+        ${secHead('tags','Tags',cnt(nT,'tags'),'Add tags')}
+        <div class="vals" id="cur-tags">${CUR.tags.map(tagChip).join('')||none}</div>
+        ${O.tags?`<div class="edit open">
+          <input id="tag-in" placeholder="type a tag, then Enter" style="width:100%" autocomplete="off" onblur="setTimeout(addTagFromInput,150)">
+          ${(DB.settings.pinned_tags||[]).length?`<div class="small muted" style="margin:7px 0 4px">Pinned — tap to add or remove</div>
+          <div class="vals" id="pin-tags">${(DB.settings.pinned_tags||[]).map(pinChip).join('')}</div>`:''}
+        </div>`:''}
+      </div>
+      <div class="blk${O.loc?' open':''}" data-sec="loc">
+        ${secHead('loc','Locators',cnt(nL,'loc'),'Add a locator')}
+        <div class="vals" id="loc-chips">${(CUR.locators||[]).map(locChip).join('')||none}</div>
+        ${O.loc?`<div class="edit open">
           <div class="row">
             <select id="loc-type">${Object.entries(LOC_TYPES).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select>
             <input id="loc-val" placeholder="value" style="width:90px" onkeydown="if(event.key==='Enter'){event.preventDefault();addLoc()}" onblur="setTimeout(addLoc,150)">
             <button class="btn sm sec" onclick="addLoc()">Add</button></div>
-        </div>
+          ${chapLocs.map(x=>`<div class="row" style="margin-top:6px"><span class="small muted" style="flex:1">Chapter “${esc(x.l.value)}” isn’t shown in citations.</span>
+            <button class="btn sm sec" onclick="chapterToPart(${x.i})" title="Move it into the citation as the part title">Cite as part title</button></div>`).join('')}
+        </div>`:''}
       </div>
-      <div class="blk">
-        <div class="bh"><span class="lbl">Purpose</span><button class="add" onclick="togCls('ed-purp')" title="Change">✎</button></div>
-        <div class="vals">${(CUR.purposes||[]).map(p=>`<span class="chip on">${esc(p)}</span>`).join('')||'<span class="small muted">none</span>'}</div>
-        <div class="edit" id="ed-purp"><div class="vals">
-          ${DB.purposes.map(p=>`<span class="chip ${CUR.purposes.includes(p.name)?'on':''}" onclick="togglePurpose('${esc(p.name).replace(/'/g,"\\'")}')">${esc(p.name)}</span>`).join('')||'<span class="small muted">none defined</span>'}
-        </div></div>
-        <div id="purpose-fields"></div>
-      </div>
-      <div class="blk">
-        <div class="bh"><span class="lbl">Scripture</span><button class="add" onclick="togCls('ed-scr')" title="Add">+</button></div>
-        <div class="vals" id="scr-chips">${(CUR.scripture_refs||[]).map(scriptureChip).join('')||'<span class="small muted">none</span>'}</div>
-        <div class="edit" id="ed-scr">
+      <div class="blk${O.scr?' open':''}" data-sec="scr">
+        ${secHead('scr','Scripture',cnt(nS,'scr'),'Add a reference')}
+        <div class="vals" id="scr-chips">${(CUR.scripture_refs||[]).map(scriptureChip).join('')||none}</div>
+        ${O.scr?`<div class="edit open">
           <div class="row" style="flex-wrap:wrap">
             <select id="scr-test" onchange="scrTestChange()"><option value="OT">OT</option><option value="NT">NT</option><option value="AP">Apoc.</option></select>
             <select id="scr-book" onchange="scrBookChange()"></select>
@@ -1807,15 +2237,15 @@ function detPanelHtml(){
           <div class="row" style="margin-top:5px">
             <input id="scr-text" placeholder="or type e.g. John 3:16-21" style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();addScriptureRefFromText()}" onblur="setTimeout(commitScrOnBlur,150)">
             <button class="btn sm sec" onclick="addScriptureRefFromText()">Add</button></div>
-        </div>
+        </div>`:''}
       </div>
-      <div class="blk">
-        <div class="bh"><span class="lbl">Tags</span>${(CUR.tags||[]).length?`<span class="badge gray">${CUR.tags.length}</span>`:''}<button class="add" onclick="togCls('ed-tags')" title="Add">+</button></div>
-        <div class="vals" id="cur-tags">${CUR.tags.map(tagChip).join('')||'<span class="small muted">none</span>'}</div>
-        <div class="edit" id="ed-tags">
-          <div class="vals" id="pin-tags">${(DB.settings.pinned_tags||[]).map(pinChip).join('')}</div>
-          <input id="tag-in" placeholder="add tag… (Enter)" style="width:100%;margin-top:6px" autocomplete="off" onblur="setTimeout(addTagFromInput,150)">
+      <div class="blk${O.purp?' open':''}" data-sec="purp">
+        ${secHead('purp','Purpose','','Change purpose and its fields')}
+        ${O.purp?`<div class="vals">
+          ${DB.purposes.map(p=>`<span class="chip ${CUR.purposes.includes(p.name)?'on':''}" onclick="togglePurpose('${esc(p.name).replace(/'/g,"\\'")}')">${esc(p.name)}</span>`).join('')||'<span class="small muted">none defined</span>'}
         </div>
+        <div id="purpose-fields"></div>`
+        :`<div class="vals">${(CUR.purposes||[]).map(p=>`<span class="chip on">${esc(p)}</span>`).join('')||none}</div>${purposeSummaryHtml()}`}
       </div>
     </div>
   </div>`;
@@ -2021,6 +2451,27 @@ function libResults(){
   });
   return sortNotes(res);
 }
+/* Search terms highlighted inside the open quote/notes panes too, not just the result list.
+   Uses the CSS Custom Highlight API, which paints ranges without touching the DOM — inserting
+   <mark> tags into an editable pane would save them into the note. Older browsers simply skip it. */
+function paneSearchHits(){
+  if(!window.CSS||!CSS.highlights||typeof Highlight==='undefined')return;
+  CSS.highlights.delete('lib-hit');
+  const toks=(LIB.q||'').trim().toLowerCase().split(/\s+/).filter(t=>t.length>=2);
+  if(!toks.length)return;
+  const ranges=[];
+  ['rte-q','rte-n'].forEach(id=>{
+    const el=$(id);if(!el)return;
+    if(id==='rte-q'&&!LIB.inQ)return; if(id==='rte-n'&&!LIB.inN)return;
+    const tw=document.createTreeWalker(el,NodeFilter.SHOW_TEXT);
+    while(tw.nextNode()){
+      const node=tw.currentNode,low=node.nodeValue.toLowerCase();
+      toks.forEach(t=>{let i=0;while((i=low.indexOf(t,i))>=0){
+        const r=new Range();r.setStart(node,i);r.setEnd(node,i+t.length);ranges.push(r);i+=t.length}});
+    }
+  });
+  if(ranges.length)CSS.highlights.set('lib-hit',new Highlight(...ranges));
+}
 function hl(html){
   const q=LIB.q.trim();if(!q)return html;
   let out=html;
@@ -2074,9 +2525,24 @@ function renderPeople(){
 }
 function openPersonModal(pid){
   MP=pid?JSON.parse(JSON.stringify(P(pid))):{id:null,name:'',sort_name:'',dates:'',notes:'',urls:[],tags:[]};
+  MP._parts=personParts(MP);
+  renderPersonModal();
+}
+function setPart(k,v){MP._parts[k]=v.trim();const c=composeName(MP._parts);const el=$('mp-preview');
+  if(el)el.innerHTML=personPreview(c)}
+const personPreview=c=>c.name?`Cited as <b>${esc(c.name)}</b> · filed under <b>${esc(c.sort_name)}</b>`:'';
+function renderPersonModal(){
+  const pp=MP._parts, c=composeName(pp);
   $('modal').innerHTML=`<h3>${MP.id?'Edit person':'New person'}</h3>
-  <label>Name (First Last)</label><input style="width:100%" value="${esc(MP.name)}" onchange="MP.name=this.value">
-  <label>Sort name (Last, First)</label><input style="width:100%" value="${esc(MP.sort_name)}" onchange="MP.sort_name=this.value">
+  ${HAS_NAME_COLS?`<div class="row">
+    <div class="fieldcol"><label>First name</label><input id="mp-first" style="width:130px" value="${esc(pp.first)}" oninput="setPart('first',this.value)"></div>
+    <div class="fieldcol"><label>Middle name(s)</label><input style="width:130px" value="${esc(pp.middle)}" oninput="setPart('middle',this.value)"></div>
+    <div class="fieldcol"><label>Last name</label><input style="width:150px" value="${esc(pp.last)}" oninput="setPart('last',this.value)"></div></div>
+    <p class="small muted" id="mp-preview" style="margin:4px 0 0">${personPreview(c)}</p>
+    <p class="small muted" style="margin:2px 0 0">Initials are fine ("J. Rodney"). A single-name author like Augustine goes in Last name. Particles stay with the surname ("Van Engen").</p>`
+  :`<div class="warn">Run the v2.6 database update (see the release notes) to get separate first / middle / last name fields.</div>
+    <label>Name (First Last)</label><input style="width:100%" value="${esc(MP.name)}" onchange="MP.name=this.value">
+    <label>Sort name (Last, First)</label><input style="width:100%" value="${esc(MP.sort_name)}" onchange="MP.sort_name=this.value">`}
   <label>Dates (e.g. 1616–1683)</label><input value="${esc(MP.dates)}" onchange="MP.dates=this.value">
   <label>URLs (one per line — bio pages etc.)</label>
   <textarea style="width:100%" rows="2" onchange="MP.urls=this.value.split('\\n').map(s=>s.trim()).filter(Boolean)">${esc((MP.urls||[]).join('\n'))}</textarea>
@@ -2092,15 +2558,23 @@ function openPersonModal(pid){
     ${MP.id?'<button class="btn danger" onclick="deletePerson()">Delete</button>':''}
   </div>`;
   $('modal-bg').classList.remove('hidden');
+  if(!MP.id&&$('mp-first'))$('mp-first').focus();
 }
 async function savePerson(){
-  if(!MP.name.trim()){toast('Name required');return}
-  {const nm=normalizePersonName(MP.name);
-   MP.name=nm.name;                                    // "Dixon, Thomas" -> "Thomas Dixon"
-   if(!MP.sort_name.trim())MP.sort_name=nm.sort_name;}
-  const rec={name:MP.name.trim(),sort_name:MP.sort_name.trim(),dates:MP.dates,notes:MP.notes,urls:MP.urls,tags:MP.tags};
+  let rec;
+  if(HAS_NAME_COLS){
+    if(!MP._parts.last&&!MP._parts.first){toast('Enter at least a last name');return}
+    rec=nameRec(MP._parts);
+  }else{
+    if(!MP.name.trim()){toast('Name required');return}
+    const nm=normalizePersonName(MP.name);
+    rec={name:nm.name,sort_name:MP.sort_name.trim()||nm.sort_name};
+  }
+  Object.assign(rec,{dates:MP.dates,notes:MP.notes,urls:MP.urls,tags:MP.tags});
   if(MP.id){const{error}=await sb.from('people').update(rec).eq('id',MP.id);if(error){toast(error.message);return}Object.assign(P(MP.id),rec)}
-  else{const{data,error}=await sb.from('people').insert(rec).select().single();if(error){toast(error.message);return}DB.people.push(data)}
+  else{
+    if(findPerson(rec.name)&&!confirm(`"${rec.name}" already exists. Create a second person with the same name anyway?`))return;
+    const{data,error}=await sb.from('people').insert(rec).select().single();if(error){toast(error.message);return}DB.people.push(data)}
   DB.people.sort((a,b)=>(a.sort_name||a.name).localeCompare(b.sort_name||b.name));
   closeModal();refreshActiveView();toast('Saved');
 }
@@ -2190,19 +2664,58 @@ function fixSortName(pid){
   const nm=normalizePersonName(p.name);
   const proposed=nm.sort_name;
   if(!confirm(`Set sort name for "${p.name}" to:\n\n    ${proposed}\n\n(It is currently "${p.sort_name||'(blank)'}".)`))return;
-  sb.from('people').update({name:nm.name,sort_name:proposed}).eq('id',pid).then(({error})=>{
+  const rec=nameRec(splitName(p.name));
+  sb.from('people').update(rec).eq('id',pid).then(({error})=>{
     if(error){toast(error.message);return}
-    p.name=nm.name;p.sort_name=proposed;
+    Object.assign(p,rec);
     DB.people.sort((a,b)=>(a.sort_name||a.name).localeCompare(b.sort_name||b.name));
     toast('Sort name fixed');refreshActiveView();
   });
 }
+const peopleUnsplit=()=>HAS_NAME_COLS?DB.people.filter(p=>!p.last_name&&!p.first_name):[];
+/* One-time (and repeatable) split of existing names into first/middle/last. Every proposal is
+   shown and editable before anything is written. */
+let SPLIT_DRAFT=null;
+function openSplitReview(){
+  SPLIT_DRAFT=peopleUnsplit().map(p=>({id:p.id,orig:p.name,...personParts(p)}));
+  renderSplitReview();
+}
+function renderSplitReview(){
+  $('modal').innerHTML=`<h3>Split author names into first / middle / last</h3>
+  <p class="small muted">Proposed from each author's current name and sort name. Correct anything that looks wrong — especially
+    single-name authors (put them in Last), particles ("Van Engen"), and family-name-last names. Nothing is saved until you press Save all.</p>
+  <div class="lookscroll" style="max-height:52vh">
+  <table class="tags" style="width:100%"><tr><th class="small muted" style="text-align:left">Current</th><th class="small muted" style="text-align:left">First</th><th class="small muted" style="text-align:left">Middle</th><th class="small muted" style="text-align:left">Last</th></tr>
+  ${SPLIT_DRAFT.map((d,i)=>`<tr><td class="small">${esc(d.orig)}</td>
+    <td><input style="width:105px" value="${esc(d.first)}" onchange="SPLIT_DRAFT[${i}].first=this.value.trim()"></td>
+    <td><input style="width:105px" value="${esc(d.middle)}" onchange="SPLIT_DRAFT[${i}].middle=this.value.trim()"></td>
+    <td><input style="width:125px" value="${esc(d.last)}" onchange="SPLIT_DRAFT[${i}].last=this.value.trim()"></td></tr>`).join('')}
+  </table></div>
+  <div class="row" style="margin-top:12px"><button class="btn" onclick="saveSplitReview()">Save all (${SPLIT_DRAFT.length})</button>
+    <button class="btn sec" onclick="closeModal()">Cancel</button><span class="small muted" id="split-status"></span></div>`;
+  $('modal-bg').classList.remove('hidden');
+}
+async function saveSplitReview(){
+  const st=$('split-status');let n=0;
+  for(const d of SPLIT_DRAFT){
+    if(!d.last&&!d.first)continue;
+    const rec=nameRec(d);
+    const{error}=await sb.from('people').update(rec).eq('id',d.id);
+    if(error){toast(error.message);if(st)st.textContent='Stopped: '+error.message;return}
+    Object.assign(P(d.id),rec);n++;if(st)st.textContent=`Saved ${n}…`;
+  }
+  DB.people.sort((a,b)=>(a.sort_name||a.name).localeCompare(b.sort_name||b.name));
+  closeModal();toast(`Split ${n} name${n===1?'':'s'}`);refreshActiveView();
+}
 function healthCardHtml(){
   const noAuth=worksMissingAuthor(), badSort=peopleBadSort(),
-        dupP=dupPeopleGroups(), dupW=dupWorkGroups();
+        dupP=dupPeopleGroups(), dupW=dupWorkGroups(), unsplit=peopleUnsplit();
   const total=noAuth.length+badSort.length+dupP.length+dupW.length;
   return `<div class="card set-section">
     <h3>Library health ${total?'<span class="badge">'+total+'</span>':''}</h3>
+    ${!HAS_NAME_COLS?`<div class="warn" style="margin-bottom:8px">Database update needed for v2.6 name fields — run the SQL in the v2.6 release notes, then reload.</div>`:''}
+    ${unsplit.length?`<div class="row" style="margin:6px 0 10px"><span class="small" style="flex:1"><b>${unsplit.length}</b> author${unsplit.length===1?'':'s'} not yet split into first / middle / last name.</span>
+      <button class="btn sm" onclick="openSplitReview()">Review &amp; split</button></div>`:''}
     <p class="small muted">Only genuine faults are listed — things that break a citation or hide a
       record. A work with no notes, or an author you have not sourced yet, is a normal bibliography
       entry and is never flagged.</p>
@@ -2254,7 +2767,7 @@ function renderSettings(){
         <label>Style name</label><input id="cs-name" placeholder="SBL">
         <label>Footnote template</label><input id="cs-note" style="width:100%" placeholder="{authors}, {title} ({place}: {publisher}, {year}), {pages}.">
         <label>Bibliography template</label><input id="cs-bib" style="width:100%" placeholder="{authors_inv}. {title}. {place}: {publisher}, {year}.">
-        <p class="small muted">Tokens: {authors} {authors_inv} {editors} {translators} {title} {title_plain} {chapter_title} {chapter_author} {chapter_author_inv} {place} {publisher} {year} {edition} {imprint} {pages}. Empty values and stray punctuation are tidied automatically.</p>
+        <p class="small muted">Tokens: {authors} {authors_inv} {editors} {translators} {title} {title_plain} {chapter_title} {chapter_author} {chapter_author_inv} {place} {publisher} {year} {edition} {imprint} {pages} — articles: {journal} {volume} {issue} {article_pages} {doi} — webpages: {site} {url} {accessed}. Empty values and stray punctuation are tidied automatically.</p>
         <button class="btn sm" onclick="addCustomStyle()" style="margin-top:6px">Save style</button>
       </details>
     </div>
@@ -2304,7 +2817,7 @@ function renderSettings(){
   <div class="card set-section">
     <h3>Text cleanup rules</h3>
     <p class="small muted">Applied from the 🧹 button on the quote/notes panes in the editor. Create rules and multi-step sequences there too.</p>
-    ${(DB.settings.cleanup_rules||[]).filter(r=>!r.hidden).map(r=>`<div class="row" style="margin:4px 0;border-bottom:1px solid var(--line);padding-bottom:4px"><b class="small">${esc(r.name)}</b><span class="small muted">replace ${esc(JSON.stringify(r.find))} with ${esc(JSON.stringify(r.replace))}${r.mode==='text'?' · plain text':''}${r.regex?' · regex':''}</span><span style="flex:1"></span><button class="btn sm sec" onclick="delCleanRuleId('${r.id}')">Delete</button></div>`).join('')||'<p class="small muted">No custom rules yet.</p>'}
+    ${(DB.settings.cleanup_rules||[]).filter(r=>!r.hidden).map(r=>`<div class="row" style="margin:4px 0;border-bottom:1px solid var(--line);padding-bottom:4px"><b class="small">${esc(r.name)}</b><span class="small muted">replace ${esc(JSON.stringify(r.find))} with ${esc(JSON.stringify(r.replace))}${r.mode==='text'?' · line-break mode':''}${r.regex?' · pattern':''}</span><span style="flex:1"></span><button class="btn sm sec" onclick="delCleanRuleId('${r.id}')">Delete</button></div>`).join('')||'<p class="small muted">No custom rules yet.</p>'}
     ${(DB.settings.cleanup_seqs||[]).map(q=>`<div class="row" style="margin:4px 0;border-bottom:1px solid var(--line);padding-bottom:4px"><b class="small">⚡ ${esc(q.name)}</b><span class="small muted">${q.steps.map(stepLabel).map(esc).join(' → ')}</span><span style="flex:1"></span><button class="btn sm sec" onclick="delCleanSeq('${q.id}')">Delete</button></div>`).join('')}
   </div>
   <div class="card set-section">
@@ -2328,7 +2841,7 @@ function renderSettings(){
   ${healthCardHtml()}
   <div class="card set-section">
     <h3>Account</h3>
-    <p class="small muted">${esc((USER&&USER.email)||'')} · Notes on Books v2.5</p>
+    <p class="small muted">${esc((USER&&USER.email)||'')} · Notes on Books v2.6</p>
     <button class="btn sec" onclick="sb.auth.signOut().then(()=>location.reload())">Sign out</button>
   </div>`;
   const pinIn=$('pin-in');if(pinIn)makeAutocomplete(pinIn,allTags,{onEnter:v=>{pinIn.value=v;pin(v)}});
@@ -2440,7 +2953,7 @@ async function importJSON(file){
     st.textContent='Importing people…';
     const clean=(o,keys)=>{const r={};keys.forEach(k=>{if(o[k]!==undefined)r[k]=o[k]});return r};
     for(let i=0;i<j.people.length;i+=100){
-      const{error}=await sb.from('people').upsert(j.people.slice(i,i+100).map(p=>clean(p,['id','name','sort_name','dates','notes','urls','tags'])));
+      const{error}=await sb.from('people').upsert(j.people.slice(i,i+100).map(p=>clean(p,['id','name','sort_name','dates','notes','urls','tags',...(HAS_NAME_COLS?['first_name','middle_name','last_name']:[])])));
       if(error)throw error;
     }
     st.textContent='Importing works…';
@@ -2544,6 +3057,34 @@ function isTextStep(key){
   if(key.startsWith('r:')){const r=(DB.settings.cleanup_rules||[]).find(x=>x.id===key.slice(2));return r&&r.mode==='text'}
   return false;
 }
+/* A rule's Find text is matched leniently on whitespace: PDF and web text is full of
+   non-breaking and thin spaces that look identical to a normal space but are different
+   characters — which is why a rule for " ;" could silently match nothing. A typed space now
+   matches any run of space-like characters, and ";" also matches the look-alike Greek question
+   mark (U+037E). Regex rules are left exactly as written. */
+const SPACE_CHARS='[ \\t\\u00a0\\u1680\\u2000-\\u200a\\u202f\\u205f\\u3000]';
+function rulePattern(r){
+  const find=unescTok(r.find);
+  if(r.regex)return new RegExp(find,'g');
+  // N typed spaces match a run of at least N space-like characters
+  return new RegExp(find.split(/( +)/).map(part=>{
+    if(/^ +$/.test(part))return SPACE_CHARS+'{'+part.length+',}';
+    return part.replace(/[.*+?^${}()|[\]\\]/g,'\\$&').replace(/;/g,'[;\\u037e]');
+  }).join(''),'g');
+}
+function ruleRepl(r){const x=unescTok(r.replace);return r.regex?x:x.replace(/\$/g,'$$$$')}
+let CLEAN_HITS=0;
+function countAndReplace(str,pat,repl){
+  const m=str.match(pat);if(m)CLEAN_HITS+=m.length;
+  return m?str.replace(pat,repl):str;
+}
+/* Formatting-preserving mode works on the text itself (each text node), never on the markup —
+   so a Find can't accidentally hit tag or attribute text, and "&" matches "&" rather than "&amp;". */
+function replaceInTextNodes(root,pat,repl){
+  const tw=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);const nodes=[];
+  while(tw.nextNode())nodes.push(tw.currentNode);
+  nodes.forEach(n=>{const v=countAndReplace(n.nodeValue,pat,repl);if(v!==n.nodeValue)n.nodeValue=v});
+}
 function htmlStepTransform(html,key){
   const urlPat=/(^|[^"'=\w])(https?:\/\/[^\s<)"']+)(?![^<]*>)/g;
   let h=html.replace(/&nbsp;/g,' ');
@@ -2553,9 +3094,9 @@ function htmlStepTransform(html,key){
   else if(key.startsWith('r:')){
     const r=(DB.settings.cleanup_rules||[]).find(x=>x.id===key.slice(2));
     if(r&&r.mode!=='text'){
-      const find=unescTok(r.find),repl=unescTok(r.replace);
-      const pat=r.regex?new RegExp(find,'g'):new RegExp(find.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'g');
-      h=h.replace(pat,repl);
+      const d=document.createElement('div');d.innerHTML=h;
+      replaceInTextNodes(d,rulePattern(r),ruleRepl(r));
+      h=d.innerHTML;
     }
   }
   return h;
@@ -2567,11 +3108,7 @@ function textStepTransform(txt,key,inline){
   }
   if(key.startsWith('r:')){
     const r=(DB.settings.cleanup_rules||[]).find(x=>x.id===key.slice(2));
-    if(r){
-      const find=unescTok(r.find),repl=unescTok(r.replace);
-      const pat=r.regex?new RegExp(find,'g'):new RegExp(find.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'g');
-      return txt.replace(pat,repl);
-    }
+    if(r)return countAndReplace(txt,rulePattern(r),ruleRepl(r));
   }
   return txt;
 }
@@ -2618,10 +3155,14 @@ function captureSelAndOpenCleanup(k){
 }
 function runClean(k,key){
   const el=$('rte-'+k);if(!el)return;
+  CLEAN_HITS=0;
+  const hasRule=expandSteps([key]).some(x=>x.startsWith('r:'));
   if(PENDING_SEL&&PENDING_SEL.k===k){applyStepsToRange(PENDING_SEL.range,[key])}
   else applyCleanStep(el,key);
   PENDING_SEL=null;
-  syncPanes();scheduleSave();closeModal();toast('Cleaned');
+  syncPanes();scheduleSave();closeModal();
+  // "Cleaned" used to appear even when a rule matched nothing, hiding the failure
+  toast(hasRule?(CLEAN_HITS?`Cleaned — ${CLEAN_HITS} replacement${CLEAN_HITS===1?'':'s'}`:'No matches found — nothing changed'):'Cleaned');
 }
 function openCleanup(k){
   syncPanes();
@@ -2635,7 +3176,7 @@ function openCleanup(k){
    <label>Built-in</label>
    ${CLEAN_BUILTINS.map(([key,name,desc])=>`<div class="sugg" onclick="runClean('${k}','${key}')"><b>${esc(name)}</b>${desc?'<br><span class="muted">'+esc(desc)+'</span>':''}</div>`).join('')}
    ${rules.length?'<label>Your rules</label>':''}
-   ${rules.map(r=>`<div class="sugg" onclick="runClean('${k}','r:${r.id}')"><b>${esc(r.name)}</b><br><span class="muted">replace ${show(r.find)} with ${show(r.replace)}${r.mode==='text'?' · plain text':''}${r.regex?' · regex':''}</span></div>`).join('')}
+   ${rules.map(r=>`<div class="sugg" onclick="runClean('${k}','r:${r.id}')"><b>${esc(r.name)}</b><br><span class="muted">replace ${show(r.find)} with ${show(r.replace)}${r.mode==='text'?' · line-break mode':''}${r.regex?' · pattern':''}</span></div>`).join('')}
    <div class="row" style="margin-top:10px">
      <button class="btn sm sec" onclick="newRuleModal('${k}')">+ New rule</button>
      <button class="btn sm sec" onclick="newSeqModal('${k}')">+ New sequence</button>
@@ -2644,15 +3185,39 @@ function openCleanup(k){
    </div>`;
   $('modal-bg').classList.remove('hidden');
 }
+const RULE_OPTS_HELP=`<div class="small muted" style="margin-top:8px;line-height:1.5">
+     <b>Most rules need neither box.</b> Type exactly what you see, spaces included — e.g. Find <code>&nbsp;;</code> (space, semicolon) and Replace <code>;</code>.<br>
+     <b>Line breaks or tabs</b> — tick this only if Find or Replace uses <code>\\n</code> (line break) or <code>\\t</code> (tab). The pane is rebuilt as plain text, so bold, italics and highlights in it are lost.<br>
+     <b>Pattern (regular expression)</b> — for advanced wildcard matching. Leave unticked unless you know regex: with it ticked, characters like <code>. ( ) [ ] ? *</code> have special meanings.</div>`;
+const ruleOptsHtml=pre=>`
+   <div class="row" style="margin-top:8px"><label style="margin:0;text-transform:none;display:flex;align-items:center;gap:5px"><input type="checkbox" id="${pre}-text" onchange="ruleLiveCount('${pre}')"> Find/replace line breaks or tabs (removes formatting)</label></div>
+   <div class="row"><label style="margin:0;text-transform:none;display:flex;align-items:center;gap:5px"><input type="checkbox" id="${pre}-regex" onchange="ruleLiveCount('${pre}')"> Find is a pattern (regular expression)</label></div>
+   ${RULE_OPTS_HELP}`;
+let RULE_PANE='q';
+/* Shows how many matches the rule would make in the open pane before you save it — so a rule
+   that can't match is obvious immediately rather than after a silent no-op. */
+function ruleLiveCount(pre){
+  const out=$(pre+'-count'),f=$(pre+'-find');if(!out||!f)return;
+  if(!f.value){out.textContent='';return}
+  const el=$('rte-'+RULE_PANE);if(!el){out.textContent='';return}
+  const txtMode=$(pre+'-text').checked||/\\[nt]/.test(f.value);
+  let n=0;
+  try{
+    const pat=rulePattern({find:f.value,regex:$(pre+'-regex').checked});
+    if(txtMode)n=((el.innerText||'').match(pat)||[]).length;
+    else{const tw=document.createTreeWalker(el,NodeFilter.SHOW_TEXT);while(tw.nextNode())n+=((tw.currentNode.nodeValue).match(pat)||[]).length}
+    out.textContent=`${n} match${n===1?'':'es'} in this ${RULE_PANE==='q'?'quote':'note'}`;
+    out.style.color=n?'var(--accent)':'var(--danger)';
+  }catch(e){out.textContent='That pattern is not valid regex';out.style.color='var(--danger)'}
+}
 function newRuleModal(k){
+  RULE_PANE=k;
   $('modal').innerHTML=`<h3>New cleanup rule</h3>
-   <label>Rule name</label><input id="nr-name" style="width:100%" placeholder="Fix six spaces">
-   <label>Find</label><input id="nr-find" style="width:100%" placeholder="text to find — use \\n for line break, \\t for tab">
+   <label>Rule name</label><input id="nr-name" style="width:100%" placeholder="Remove space before semicolon">
+   <label>Find</label><input id="nr-find" style="width:100%" placeholder="exactly what to find, spaces included" oninput="ruleLiveCount('nr')">
+   <div class="small" id="nr-count" style="margin-top:3px;min-height:1.2em"></div>
    <label>Replace with (blank = delete matches)</label><input id="nr-repl" style="width:100%">
-   <div class="row" style="margin-top:8px">
-     <label style="margin:0;text-transform:none;display:flex;align-items:center;gap:5px"><input type="checkbox" id="nr-text" checked> plain-text mode (needed for \\n and \\t; clears formatting in the pane)</label>
-   </div>
-   <div class="row"><label style="margin:0;text-transform:none;display:flex;align-items:center;gap:5px"><input type="checkbox" id="nr-regex"> treat Find as a regular expression</label></div>
+   ${ruleOptsHtml('nr')}
    <div class="row" style="margin-top:12px">
      <button class="btn" onclick="saveNewRule('${k}')">Save rule</button>
      <button class="btn sec" onclick="openCleanup('${k}')">Back</button>
@@ -2663,7 +3228,9 @@ function saveNewRule(k){
   const name=$('nr-name').value.trim(),find=$('nr-find').value,repl=$('nr-repl').value;
   if(!name||!find){toast('Name and Find are required');return}
   DB.settings.cleanup_rules=DB.settings.cleanup_rules||[];
-  DB.settings.cleanup_rules.push({id:'cr_'+Date.now().toString(36),name,find,replace:repl,regex:$('nr-regex').checked,mode:$('nr-text').checked?'text':'html'});
+  // \n / \t can only be matched as plain text, so that mode is implied whenever they're used
+  const txt=$('nr-text').checked||/\\[nt]/.test(find+repl);
+  DB.settings.cleanup_rules.push({id:'cr_'+Date.now().toString(36),name,find,replace:repl,regex:$('nr-regex').checked,mode:txt?'text':'html'});
   saveSettings();toast('Rule saved');openCleanup(k);
 }
 let SEQ_DRAFT=[],SEQ_NAME='';
@@ -2674,13 +3241,15 @@ function addInlineSeqStep(k){
   if(!name||!find){toast('Name and Find are required for the new step');return}
   DB.settings.cleanup_rules=DB.settings.cleanup_rules||[];
   const id='cr_'+Date.now().toString(36);
-  DB.settings.cleanup_rules.push({id,name,find,replace:repl,regex:$('is-regex').checked,mode:$('is-text').checked?'text':'html',hidden:true});
+  const txt=$('is-text').checked||/\\[nt]/.test(find+repl);
+  DB.settings.cleanup_rules.push({id,name,find,replace:repl,regex:$('is-regex').checked,mode:txt?'text':'html',hidden:true});
   saveSettings();
   SEQ_NAME=$('sq-name')?$('sq-name').value:SEQ_NAME;
   SEQ_DRAFT.push('r:'+id);
   renderSeqModal(k);
 }
 function renderSeqModal(k){
+  RULE_PANE=k;
   const rules=(DB.settings.cleanup_rules||[]).filter(r=>!r.hidden);
   const avail=[...CLEAN_BUILTINS.map(b=>[b[0],b[1]]),...rules.map(r=>['r:'+r.id,r.name])];
   $('modal').innerHTML=`<h3>New cleanup sequence</h3>
@@ -2690,12 +3259,10 @@ function renderSeqModal(k){
    <div class="row">${avail.map(([key,name])=>`<span class="chip" onclick="addSeqStep('${key}','${k}')">${esc(name)}</span>`).join('')}</div>
    <details style="margin-top:8px"><summary class="small" style="cursor:pointer;color:var(--accent)">+ Define a new find/replace step</summary>
      <label>Step name</label><input id="is-name" style="width:100%" placeholder="Kill soft returns">
-     <label>Find</label><input id="is-find" style="width:100%" placeholder="use \\n for line break, \\t for tab">
+     <label>Find</label><input id="is-find" style="width:100%" placeholder="exactly what to find, spaces included" oninput="ruleLiveCount('is')">
+     <div class="small" id="is-count" style="margin-top:3px;min-height:1.2em"></div>
      <label>Replace with (blank = delete matches)</label><input id="is-repl" style="width:100%">
-     <div class="row" style="margin-top:6px">
-       <label style="margin:0;text-transform:none;display:flex;align-items:center;gap:5px"><input type="checkbox" id="is-text" checked> plain-text mode</label>
-       <label style="margin:0;text-transform:none;display:flex;align-items:center;gap:5px"><input type="checkbox" id="is-regex"> regex</label>
-     </div>
+     ${ruleOptsHtml('is')}
      <button class="btn sm" style="margin-top:8px" onclick="addInlineSeqStep('${k}')">Add this step to the sequence</button>
    </details>
    <label style="margin-top:10px">Sequence (${SEQ_DRAFT.length} steps)</label>
