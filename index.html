@@ -217,6 +217,8 @@ body.v2 #view-works,body.v2 #view-people,body.v2 #view-settings{
 .rte p{margin:0 0 .8em}
 .rte ul,.rte ol{margin:0 0 .8em;padding-left:1.5em}
 .rte li{margin:.15em 0}
+/* indented paragraph (a quotation inside the quotation) — what execCommand('indent') produces */
+.rte blockquote{margin:0 0 .8em 2em!important;padding:0!important;border:none!important}
 .note-card ul,.note-card ol{margin:0 0 .6em;padding-left:1.4em}
 /* ---------- library list ---------- */
 .note-card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:10px}
@@ -1163,6 +1165,8 @@ function autoDetectScripture(k){
   toast(added?`Added ${added} reference${added===1?'':'s'}`:'No new explicit references found');
 }
 function rteShortcut(e){
+  // Tab / Shift+Tab indent and outdent the paragraph instead of leaving the box
+  if(e.key==='Tab'&&!e.metaKey&&!e.ctrlKey&&!e.altKey){e.preventDefault();fmt(e.shiftKey?'outdent':'indent');return}
   const mod=e.metaKey||e.ctrlKey;
   if(!mod)return;
   const k=e.key.toLowerCase();
@@ -1177,27 +1181,44 @@ function sanitizePaste(e){
   let out='';
   if(html){
     const doc=new DOMParser().parseFromString(html,'text/html');
+    /* A pasted numbered list (typically footnotes, <ol start="4">) used to become a fresh <ol>,
+       which dropped "start" and renumbered from 1. Numbered items now arrive as ordinary
+       paragraphs carrying their ORIGINAL numbers as text. Paragraphs indented in the source
+       (margin/padding-left, or <blockquote>) keep their indent. */
+    const indented=el=>{const st=el.getAttribute&&el.getAttribute('style')||'';
+      const m=st.match(/(?:margin|padding)-left\s*:\s*([\d.]+)(px|pt|em|rem|in|cm)/i);if(!m)return false;
+      const v=parseFloat(m[1])*({px:1,pt:1.33,em:16,rem:16,in:96,cm:37.8})[m[2].toLowerCase()];return v>=20};
     const walk=node=>{
       let r='';
       node.childNodes.forEach(ch=>{
         if(ch.nodeType===3)r+=esc(ch.textContent);
         else if(ch.nodeType===1){
-          const tag=ch.tagName, inner=walk(ch);
+          const tag=ch.tagName;
+          if(tag==='OL'){
+            let num=parseInt(ch.getAttribute('start'),10);if(isNaN(num))num=1;
+            [...ch.children].forEach(li=>{
+              if(li.tagName!=='LI'){r+=walk(li);return}
+              const v=parseInt(li.getAttribute('value'),10);if(!isNaN(v))num=v;
+              r+='<p>'+num+'. '+walk(li).replace(/<\/?p>/g,' ').replace(/\s+/g,' ').trim()+'</p>';num++;
+            });
+            return;
+          }
+          const inner=walk(ch);
           if(tag==='BR')r+='<br>';
           else if(tag==='B'||tag==='STRONG')r+='<b>'+inner+'</b>';
           else if(tag==='I'||tag==='EM')r+='<i>'+inner+'</i>';
           else if(tag==='U')r+='<u>'+inner+'</u>';
           else if(tag==='MARK')r+='<mark>'+inner+'</mark>';
           else if(tag==='UL')r+='<ul>'+inner+'</ul>';
-          else if(tag==='OL')r+='<ol>'+inner+'</ol>';
           else if(tag==='LI')r+='<li>'+inner+'</li>';
-          else if(tag==='P'||tag==='DIV'||tag==='TR'||/^H\d$/.test(tag))r+='<p>'+inner+'</p>';
+          else if(tag==='BLOCKQUOTE')r+='<blockquote>'+(/<p>/.test(inner)?inner:'<p>'+inner+'</p>')+'</blockquote>';
+          else if(tag==='P'||tag==='DIV'||tag==='TR'||/^H\d$/.test(tag))r+=indented(ch)?'<blockquote><p>'+inner+'</p></blockquote>':'<p>'+inner+'</p>';
           else if(tag!=='STYLE'&&tag!=='SCRIPT'&&tag!=='HEAD')r+=inner;
         }
       });
       return r;
     };
-    out=walk(doc.body||doc).replace(/<p>(\s|<br>)*<\/p>/g,'').replace(/(<p>)+/g,'<p>').replace(/(<\/p>)+/g,'</p>');
+    out=walk(doc.body||doc).replace(/<p>(\s|<br>)*<\/p>/g,'').replace(/(<p>)+/g,'<p>').replace(/(<\/p>)+/g,'</p>').replace(/<blockquote><\/blockquote>/g,'');
   }
   if(!out)out=esc(text).replace(/\n{2,}/g,'</p><p>').replace(/\n/g,'<br>');
   document.execCommand('insertHTML',false,out);
@@ -1208,9 +1229,11 @@ function rteBar(k){
   return b('bold','<b>B</b>')+b('italic','<i>I</i>')+b('underline','<u>U</u>')+
     `<button class="tbtn" onmousedown="event.preventDefault();fmt('insertUnorderedList')" title="bulleted list">&bull;&nbsp;&#8801;</button>`+
     `<button class="tbtn" onmousedown="event.preventDefault();fmt('insertOrderedList')" title="numbered list">1.&nbsp;&#8801;</button>`+
+    `<button class="tbtn" onmousedown="event.preventDefault();fmt('indent')" title="indent paragraph (Tab)">&#8677;</button>`+
+    `<button class="tbtn" onmousedown="event.preventDefault();fmt('outdent')" title="remove indent (Shift+Tab)">&#8676;</button>`+
     `<button class="tbtn" style="background:var(--hl)" onmousedown="event.preventDefault();toggleHighlight()" title="highlight / un-highlight the selection">✺</button>`+
     `<button class="tbtn" onmousedown="event.preventDefault();clearFormatting('${k}')" title="clear formatting — clears the selection, or the whole box if nothing's selected">Tx</button>`+
-    `<button class="tbtn" onmousedown="event.preventDefault();captureSelAndOpenCleanup('${k}')" title="clean up pasted text">🧹</button>`+
+    `<button class="tbtn" onpointerdown="captureCleanSel('${k}')" onmousedown="event.preventDefault()" onclick="openCleanupBtn('${k}')" title="clean up pasted text">🧹</button>`+
     `<button class="tbtn" onmousedown="event.preventDefault();autoDetectScripture('${k}')" title="find scripture references (explicit chapter:verse only)">📖+</button>`;
 }
 function fmt(cmd,_,arg){document.execCommand(cmd,false,arg||null)}
@@ -2427,22 +2450,32 @@ function sortNotes(arr){
      Every number in every page locator is collected and the lowest wins, so a range ("193-195")
      sorts at 193 and a record with two page locators sorts by its earliest. The old version
      stripped non-digits from the whole string, turning "193-195" into 193195. */
-  const firstPage=n=>{
-    const nums=(n.locators||[]).filter(x=>x.type==='page')
-      .flatMap(x=>String(x.value).match(/\d+(?:\.\d+)?/g)||[])
-      .map(Number).filter(v=>!isNaN(v));
-    return nums.length?Math.min(...nums):Infinity;
+  /* Sort key [start, end]: a single page 109 is [109,109], the range 109-110 is [109,110], so
+     ties on the start page go to the shorter span — "109" before "109-110" (previously both keyed
+     on 109 alone and fell back to date order). Abbreviated ends are expanded: "109-10" = 109–110. */
+  const pageKey=n=>{
+    let lo=Infinity,hi=Infinity;
+    (n.locators||[]).filter(x=>x.type==='page').forEach(x=>{
+      String(x.value).split(/[,;]/).forEach(part=>{
+        const m=part.match(/(\d+)(?:\s*[-\u2013\u2014]\s*(\d+))?/);if(!m)return;
+        const a=+m[1];let b=m[2]?+m[2]:a;
+        if(m[2]&&b<a&&m[2].length<m[1].length){const f=Math.pow(10,m[2].length);b=a-(a%f)+b;if(b<a)b+=f}
+        if(a<lo||(a===lo&&b<hi)){lo=a;hi=b}
+      });
+    });
+    return[lo,hi];
   };
+  const pageCmp=(x,y)=>{const a=pageKey(x),b=pageKey(y);return(a[0]-b[0])||(a[1]-b[1])||0};
   const aw=n=>{const w=W(n.work_id);if(!w)return'zzzz';const p=contribs(w.id,'author')[0]||contribs(w.id,'editor')[0];return p?(p.sort_name||p.name):'zzzz'};
   const wt=n=>{const w=W(n.work_id);return w?w.title:'zzzz'};
   const yr=n=>{const w=W(n.work_id);const y=w&&w.pub?parseInt(w.pub.year):NaN;return isNaN(y)?Infinity:y};
   const c=[...arr];
   if(st==='old')c.sort((a,b)=>(a.date_added||'').localeCompare(b.date_added||''));
-  else if(st==='author')c.sort((a,b)=>aw(a).localeCompare(aw(b))||wt(a).localeCompare(wt(b))||firstPage(a)-firstPage(b));
-  else if(st==='title')c.sort((a,b)=>wt(a).localeCompare(wt(b))||firstPage(a)-firstPage(b));
-  else if(st==='year')c.sort((a,b)=>yr(a)-yr(b)||wt(a).localeCompare(wt(b))||firstPage(a)-firstPage(b));
-  else if(st==='page')c.sort((a,b)=>wt(a).localeCompare(wt(b))||firstPage(a)-firstPage(b));
-  else if(st==='pagenum')c.sort((a,b)=>firstPage(a)-firstPage(b)||wt(a).localeCompare(wt(b)));
+  else if(st==='author')c.sort((a,b)=>aw(a).localeCompare(aw(b))||wt(a).localeCompare(wt(b))||pageCmp(a,b));
+  else if(st==='title')c.sort((a,b)=>wt(a).localeCompare(wt(b))||pageCmp(a,b));
+  else if(st==='year')c.sort((a,b)=>yr(a)-yr(b)||wt(a).localeCompare(wt(b))||pageCmp(a,b));
+  else if(st==='page')c.sort((a,b)=>wt(a).localeCompare(wt(b))||pageCmp(a,b));
+  else if(st==='pagenum')c.sort((a,b)=>pageCmp(a,b)||wt(a).localeCompare(wt(b)));
   else c.sort((a,b)=>(b.date_added||'').localeCompare(a.date_added||''));
   return c;
 }
@@ -2969,7 +3002,7 @@ function renderSettings(){
   ${healthCardHtml()}
   <div class="card set-section">
     <h3>Account</h3>
-    <p class="small muted">${esc((USER&&USER.email)||'')} · Notes on Books v2.6.1</p>
+    <p class="small muted">${esc((USER&&USER.email)||'')} · Notes on Books v2.7</p>
     <button class="btn sec" onclick="sb.auth.signOut().then(()=>location.reload())">Sign out</button>
   </div>`;
   const pinIn=$('pin-in');if(pinIn)makeAutocomplete(pinIn,allTags,{onEnter:v=>{pinIn.value=v;pin(v)}});
@@ -3147,7 +3180,7 @@ async function updateAllScriptureRefs(){
 /* ================= text cleanup ================= */
 const CLEAN_BUILTINS=[
  ['b:spaces','Collapse repeated spaces','Fixes PDF paste artifacts — runs of 2+ spaces become one'],
- ['b:joinlines','Join broken lines (PDF paste)','Merges the hard return at the end of each line; blank lines stay as paragraph breaks. Note: clears bold/italic/highlight in this pane.'],
+ ['b:joinlines','Join broken lines (PDF paste)','Joins lines that break mid-sentence, including pastes where every line became its own paragraph; real paragraph ends (after . ? ! etc.) are kept. Note: clears bold/italic/highlight in this pane.'],
  ['b:linkify','Bare URLs → small 🔗 links','Restores readability but keeps each link clickable'],
  ['b:strip_urls','Remove bare URLs entirely','']];
 function stepLabel(key){
@@ -3170,7 +3203,7 @@ function fragText(node){
       if(tag==='BR')out+='\n';
       else{
         const inner=fragText(ch);
-        if(tag==='P'||tag==='DIV'||tag==='LI')out+=inner+'\n\n';
+        if(tag==='P'||tag==='DIV'||tag==='LI'||tag==='BLOCKQUOTE')out+=inner+'\n\n';
         else out+=inner;
       }
     }
@@ -3232,7 +3265,19 @@ function htmlStepTransform(html,key){
 function textStepTransform(txt,key,inline){
   if(key==='b:joinlines'){
     if(inline)return txt.replace(/\s*\n+\s*/g,' ').replace(/ {2,}/g,' ').trim();
-    return txt.split(/\n{2,}/).map(p=>p.replace(/\s*\n\s*/g,' ').replace(/ {2,}/g,' ').trim()).filter(Boolean).join('\n\n');
+    /* PDF/web pastes often arrive with EVERY line as its own paragraph, so joining only within
+       paragraphs did nothing on a whole pane. A "paragraph" that ends mid-sentence (lower-case
+       letter, comma or hyphen) is now joined to the next; a hyphen at the break is removed when
+       the next line starts lower-case ("affec- / tions" -> "affections"). */
+    const paras=txt.split(/\n{2,}/).map(p=>p.replace(/\s*\n\s*/g,' ').replace(/ {2,}/g,' ').trim()).filter(Boolean);
+    const out=[];
+    paras.forEach(p=>{
+      const prev=out[out.length-1];
+      if(prev&&/[a-z,;\-\u00ad]$/.test(prev)){
+        out[out.length-1]=(/[a-z]-$/.test(prev)&&/^[a-z]/.test(p))?prev.slice(0,-1)+p:prev.replace(/\u00ad$/,'')+' '+p;
+      }else out.push(p);
+    });
+    return out.join('\n\n');
   }
   if(key.startsWith('r:')){
     const r=(DB.settings.cleanup_rules||[]).find(x=>x.id===key.slice(2));
@@ -3270,27 +3315,65 @@ function applyStepsToRange(range,keys){
   let node;while(node=tmp.firstChild)frag.appendChild(node);
   range.insertNode(frag);
 }
-let PENDING_SEL=null;
-function captureSelAndOpenCleanup(k){
-  const el=$('rte-'+k);
-  PENDING_SEL=null;
-  const sel=window.getSelection();
-  if(sel&&sel.rangeCount){
-    const range=sel.getRangeAt(0);
-    if(!range.collapsed&&el&&el.contains(range.commonAncestorContainer))PENDING_SEL={k,range:range.cloneRange()};
-  }
+/* ---- remembering the selection for 🧹 ----
+   iPad: tapping a button outside the text clears the selection BEFORE the button's mousedown fires,
+   so the old capture-on-mousedown saw nothing — and the selected-text cleanup silently ran on
+   nothing. Now (a) the last real selection inside each pane is tracked as it changes, and
+   (b) it's stored as character offsets, not a live Range, then rebuilt (and checked to still be the
+   same text) when an option is tapped. */
+let PENDING_SEL=null, LAST_SEL=null;   // {k, start, end, text, note}
+function textOffset(root,node,off){const r=document.createRange();r.setStart(root,0);r.setEnd(node,off);return r.toString().length}
+function rangeFromOffsets(root,a,b){
+  const tw=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let pos=0,r=document.createRange(),gotStart=false;
+  while(tw.nextNode()){const t=tw.currentNode,len=t.nodeValue.length;
+    if(!gotStart&&a<=pos+len){r.setStart(t,a-pos);gotStart=true}
+    if(gotStart&&b<=pos+len){r.setEnd(t,b-pos);return r}
+    pos+=len;}
+  return null;
+}
+function paneSel(){
+  const s=getSelection();if(!s||!s.rangeCount)return null;
+  const r=s.getRangeAt(0);let n=r.commonAncestorContainer;if(n.nodeType!==1)n=n.parentNode;
+  const host=n&&n.closest&&n.closest('.rte');if(!host)return{outside:true};
+  if(r.collapsed)return{collapsed:true};
+  return{k:host.id.replace('rte-',''),start:textOffset(host,r.startContainer,r.startOffset),end:textOffset(host,r.endContainer,r.endOffset),text:r.toString(),note:CUR};
+}
+document.addEventListener('selectionchange',()=>{
+  const ps=paneSel();if(!ps)return;
+  if(ps.k)LAST_SEL=ps;                         // a real selection inside a pane
+  else if(ps.collapsed)LAST_SEL=null;          // caret placed / typing: selection is over
+  else{const ae=document.activeElement;if(ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName))LAST_SEL=null}
+  // anything else (e.g. iOS clearing it as a button is tapped) keeps the last one
+});
+function captureCleanSel(k){
+  const ps=paneSel();
+  if(ps&&ps.k===k)PENDING_SEL=ps;
+  else if(LAST_SEL&&LAST_SEL.k===k&&LAST_SEL.note===CUR)PENDING_SEL=LAST_SEL;
+  else PENDING_SEL=null;
+  if(PENDING_SEL)PENDING_SEL.at=Date.now();
+}
+function openCleanupBtn(k){
+  if(!PENDING_SEL||PENDING_SEL.k!==k||Date.now()-PENDING_SEL.at>3000)captureCleanSel(k);   // no pointer events
   openCleanup(k);
 }
+function captureSelAndOpenCleanup(k){captureCleanSel(k);openCleanup(k)}
 function runClean(k,key){
   const el=$('rte-'+k);if(!el)return;
   CLEAN_HITS=0;
   const hasRule=expandSteps([key]).some(x=>x.startsWith('r:'));
-  if(PENDING_SEL&&PENDING_SEL.k===k){applyStepsToRange(PENDING_SEL.range,[key])}
+  const before=el.innerHTML;
+  if(PENDING_SEL&&PENDING_SEL.k===k){
+    const r=rangeFromOffsets(el,PENDING_SEL.start,PENDING_SEL.end);
+    if(!r||r.toString()!==PENDING_SEL.text){PENDING_SEL=null;closeModal();toast('Couldn\u2019t find the selected text any more \u2014 select it again and retry');return}
+    applyStepsToRange(r,[key]);
+  }
   else applyCleanStep(el,key);
-  PENDING_SEL=null;
+  PENDING_SEL=null;LAST_SEL=null;
   syncPanes();scheduleSave();closeModal();
-  // "Cleaned" used to appear even when a rule matched nothing, hiding the failure
-  toast(hasRule?(CLEAN_HITS?`Cleaned — ${CLEAN_HITS} replacement${CLEAN_HITS===1?'':'s'}`:'No matches found — nothing changed'):'Cleaned');
+  // "Cleaned" used to appear even when nothing changed, which made a no-op look like a broken button
+  const changed=el.innerHTML!==before;
+  toast(hasRule&&CLEAN_HITS?`Cleaned \u2014 ${CLEAN_HITS} replacement${CLEAN_HITS===1?'':'s'}`
+       :changed?'Cleaned':(hasRule?'No matches found \u2014 nothing changed':'Nothing to clean here \u2014 no changes made'));
 }
 function openCleanup(k){
   syncPanes();

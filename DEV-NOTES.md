@@ -423,3 +423,22 @@ session-info tools for full history).
      its longest unbreakable word, so a long URL in a note preview widened .listcol (330 -> 580px in
      the harness) and pushed Details off-screen. .listcol min/max-width + overflow-wrap:anywhere on
      previews, group bars, citation and panes.
+
+- v2.7 (2026-10-30): four items. No DB migration.
+  1. Paragraph indent: ⇥ / ⇤ toolbar buttons and Tab / Shift+Tab in both panes (execCommand
+     indent/outdent -> <blockquote>, styled as a 2em left indent). Paste keeps source indents:
+     <blockquote>, or a P/DIV with margin/padding-left >= ~20px.
+  2. Pasted footnotes renumbering from 1: sanitizePaste turned <ol start="4"> into a bare <ol>.
+     Numbered lists now paste as plain paragraphs carrying their original numbers (start and
+     li value respected). The 1.≡ button still makes real numbered lists. Already-saved notes
+     can't recover lost numbers.
+  3. 🧹 cleanup. (a) iPad: tapping the button cleared the selection before its mousedown fired.
+     Selection is now tracked on selectionchange (LAST_SEL) and captured on pointerdown, stored as
+     text offsets, and rebuilt + verified (same text) when an option runs. Modal opens on click,
+     not mousedown. (b) Whole pane: "Join broken lines" only joined within a paragraph, but
+     PDF/web pastes often make every line a paragraph, so a whole-note run changed nothing. It now
+     joins paragraphs ending mid-sentence (lower-case/comma/semicolon/hyphen), removing a hyphen
+     at the break. (c) Toast reports "Nothing to clean here" when the pane didn't change, instead
+     of "Cleaned".
+  4. Page sort: key is [start, end], so "109" sorts before "109-110"; abbreviated range ends are
+     expanded ("109-10" = 109–110).
