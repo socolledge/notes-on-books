@@ -442,3 +442,18 @@ session-info tools for full history).
      of "Cleaned".
   4. Page sort: key is [start, end], so "109" sorts before "109-110"; abbreviated range ends are
      expanded ("109-10" = 109–110).
+
+- v2.8 (2026-11-06): three items. No DB migration.
+  1. iPad floating keyboard bar (shown with a hardware keyboard): it's iPadOS UI and can't be
+     hidden from a web page. On touch devices the panes get 96px of bottom padding so the last
+     lines can scroll above it. User-side: Settings → General → Keyboard → Shortcuts / Predictive.
+  2. Saved views: a dropdown on the toolbar between Filters and Clear (only once a view exists),
+     showing the active view until a filter or sort changes (ACTIVE_VIEW snapshot). Saving stays
+     in Filters → Saved views, which now lists every view as a chip: tap to apply, × to delete.
+  3. Pasted footnotes still restarting at 1. Cause: copying PART of a list makes the browser wrap
+     the items in a new <ol> whose start is wrong (often absent), and a selection running into a
+     second <ol> got numbered from 1 again. Numbering now comes from, in order: the item's own
+     footnote anchor (id/name/href like fn12, cite_note-12, endnote12, edn12; or li value); a
+     continuation of the previous list in the same paste; numbers already in the item text; else
+     one prompt ("What number is the first item?") defaulting to the clipboard's start.
+  Test harness now kept in the project folder: test-harness/ (build-harness.sh + fake-supabase.js).

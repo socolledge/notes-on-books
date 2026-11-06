@@ -132,6 +132,7 @@ body.v2 #view-works,body.v2 #view-people,body.v2 #view-settings{
 .pf-sum span{color:var(--muted)}
 .pf-sum b{font-weight:600;text-align:right}
 .ptog{display:inline-flex;align-items:center;gap:5px}
+.viewsel{max-width:190px}
 .ptog.on{background:var(--accent);color:#fff;border-color:var(--accent)}
 .blk .bh .lbl{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
 .blk .bh .add{background:none;border:1px solid var(--line);border-radius:6px;min-width:24px;height:24px;font-size:13px;line-height:1;color:var(--muted);padding:0 5px}
@@ -218,6 +219,9 @@ body.v2 #view-works,body.v2 #view-people,body.v2 #view-settings{
 .rte ul,.rte ol{margin:0 0 .8em;padding-left:1.5em}
 .rte li{margin:.15em 0}
 /* indented paragraph (a quotation inside the quotation) — what execCommand('indent') produces */
+/* iPad with a hardware keyboard shows a floating system bar (B I U, arrows, mic) over the bottom of
+   the screen. A web page can't hide it, so give the panes room to scroll their last lines above it. */
+@media (pointer:coarse){.rte{padding-bottom:96px}}
 .rte blockquote{margin:0 0 .8em 2em!important;padding:0!important;border:none!important}
 .note-card ul,.note-card ol{margin:0 0 .6em;padding-left:1.4em}
 /* ---------- library list ---------- */
@@ -1188,6 +1192,7 @@ function sanitizePaste(e){
     const indented=el=>{const st=el.getAttribute&&el.getAttribute('style')||'';
       const m=st.match(/(?:margin|padding)-left\s*:\s*([\d.]+)(px|pt|em|rem|in|cm)/i);if(!m)return false;
       const v=parseFloat(m[1])*({px:1,pt:1.33,em:16,rem:16,in:96,cm:37.8})[m[2].toLowerCase()];return v>=20};
+    const PASTE_OL={next:null,asked:false};   // per-paste numbering state
     const walk=node=>{
       let r='';
       node.childNodes.forEach(ch=>{
@@ -1195,12 +1200,40 @@ function sanitizePaste(e){
         else if(ch.nodeType===1){
           const tag=ch.tagName;
           if(tag==='OL'){
-            let num=parseInt(ch.getAttribute('start'),10);if(isNaN(num))num=1;
-            [...ch.children].forEach(li=>{
-              if(li.tagName!=='LI'){r+=walk(li);return}
-              const v=parseInt(li.getAttribute('value'),10);if(!isNaN(v))num=v;
-              r+='<p>'+num+'. '+walk(li).replace(/<\/?p>/g,' ').replace(/\s+/g,' ').trim()+'</p>';num++;
+            /* Where do the numbers come from? Copying PART of a list (footnotes 12-15) makes the
+               browser wrap those items in a fresh list whose numbering is wrong — so "start"
+               can't be trusted for the first list in a paste. In order of reliability:
+               1. the footnote's own anchor (id/href/name like fn12, cite_note-12, endnote12);
+               2. for a second list in the same paste, carry on from where the first ended;
+               3. otherwise ask once, defaulting to what the clipboard claims. */
+            const items=[...ch.children].filter(li=>li.tagName==='LI');
+            const anchorNum=li=>{
+              const v=parseInt(li.getAttribute('value'),10);if(!isNaN(v))return v;
+              const els=[li,...li.querySelectorAll('[id],[name],a[href]')];
+              for(const el of els){for(const a of ['id','name','href']){const x=el.getAttribute&&el.getAttribute(a);if(!x)continue;
+                const m=x.match(/(?:^|[#_\-:.\/])(?:fn|footnote|ftn|note|en|endnote|edn|cite_note)(?:ref)?[-_:]?(\d{1,4})(?!\d)/i);if(m)return +m[1]}}
+              return null;
+            };
+            const nums=items.map(anchorNum);
+            let num;
+            const firstKnown=nums.findIndex(x=>x!=null);
+            if(firstKnown>=0)num=nums[firstKnown]-firstKnown;
+            else if(PASTE_OL.next!=null)num=PASTE_OL.next;
+            else if(items.length&&items.every(li=>/^\s*\d{1,4}[.)]\s/.test(li.textContent)))num=1;   // numbers are in the text already
+            else{
+              const claimed=parseInt(ch.getAttribute('start'),10);
+              const preview=(items[0]?items[0].textContent:'').trim().replace(/\s+/g,' ').slice(0,60);
+              const ans=PASTE_OL.asked?null:prompt(`You pasted a numbered list (${items.length} item${items.length===1?'':'s'}), but its original numbers didn't come with it.\n\nWhat number is the first item?\n"${preview}${preview.length>=60?'…':''}"`,isNaN(claimed)?'1':String(claimed));
+              PASTE_OL.asked=true;
+              num=parseInt(ans,10);if(isNaN(num))num=isNaN(claimed)?1:claimed;
+            }
+            items.forEach((li,i)=>{
+              if(nums[i]!=null)num=nums[i];
+              const body=walk(li).replace(/<\/?p>/g,' ').replace(/\s+/g,' ').trim();
+              // keep a number that's already part of the text ("12. Owen…") rather than doubling it
+              r+='<p>'+(/^\d{1,4}[.)]\s/.test(stripHtml(body))?'':num+'. ')+body+'</p>';num++;
             });
+            PASTE_OL.next=num;
             return;
           }
           const inner=walk(ch);
@@ -2109,6 +2142,9 @@ function toolRowHtml(){
     </span>
     <input id="lib-q" placeholder="Search…" value="${esc(LIB.q)}" style="flex:1;min-width:90px;max-width:280px" oninput="LIB.q=this.value;renderNotesList();refreshPager();paneSearchHits()">
     <button class="btn sm sec" onclick="toggleFilters()">Filters${fc?' <span class="badge">'+fc+'</span>':''}</button>
+    ${(DB.settings.saved_filters||[]).length?`<select class="viewsel" onchange="applyView(this.value)" title="Saved views — save or delete them in Filters">
+      <option value="" ${activeViewId()?'':'selected'}>${activeViewId()?'— views —':'Saved views…'}</option>
+      ${DB.settings.saved_filters.map(v=>`<option value="${v.id}" ${activeViewId()===v.id?'selected':''}>${esc(v.name)}</option>`).join('')}</select>`:''}
     ${fc?'<button class="btn sm gho" onclick="clearLib()">Clear</button>':''}
     <select onchange="LIB.sort=this.value;renderNotes()" title="Sort order">
       ${[['new','newest first'],['old','oldest first'],['author','sort: author'],['title','sort: title'],['year','sort: pub date'],['page','sort: work + page'],['pagenum','sort: page number']].map(([v,l])=>`<option value="${v}" ${LIB.sort===v?'selected':''}>${l}</option>`).join('')}
@@ -2158,11 +2194,10 @@ function filtersPopHtml(){
         ${(LIB.person?DB.works.filter(w=>DB.wc.some(c=>c.work_id===w.id&&c.person_id===LIB.person)):DB.works)
           .map(w=>`<option value="${w.id}" ${LIB.work===w.id?'selected':''}>${esc(w.title)}</option>`).join('')}</select>
     </div></details>
-    <details class="grp"><summary>Saved views</summary><div class="gi">
-      <select id="lib-views" onchange="applyView(this.value)"><option value="">saved views…</option>
-        ${(DB.settings.saved_filters||[]).map(v=>`<option value="${v.id}">${esc(v.name)}</option>`).join('')}</select>
-      <button class="btn sm sec" onclick="saveView()">💾 Save this view</button>
-      <button class="btn sm gho" onclick="deleteView()">Delete view</button>
+    <details class="grp" open><summary>Saved views</summary><div class="gi">
+      <button class="btn sm sec" onclick="saveView()">💾 Save current filters as a view</button>
+      <div style="width:100%"></div>
+      ${(DB.settings.saved_filters||[]).map(v=>`<span class="chip ${activeViewId()===v.id?'on':''}" onclick="applyView('${v.id}')" title="Apply">${esc(v.name)}<span class="x" title="Delete this view" onclick="event.stopPropagation();deleteView('${v.id}')">×</span></span>`).join('')||'<span class="small muted">None yet. Views you save appear in the toolbar for one-tap access.</span>'}
     </div></details>
   </div>`;
 }
@@ -2440,9 +2475,15 @@ let LIB={q:'',inQ:true,inN:true,inT:true,tags:[],purpose:'',work:'',person:'',sc
 try{const _ls=JSON.parse(localStorage.getItem('nob_lib')||'null');if(_ls){Object.assign(LIB,_ls);LIB.sel=new Set();LIB.selMode=false}}catch(e){}
 function saveLibState(){try{localStorage.setItem('nob_lib',JSON.stringify({q:LIB.q,inQ:LIB.inQ,inN:LIB.inN,inT:LIB.inT,tags:LIB.tags,purpose:LIB.purpose,work:LIB.work,person:LIB.person,scripture:LIB.scripture,sort:LIB.sort,pf:LIB.pf}))}catch(e){}}
 function libSnapshot(){return{q:LIB.q,inQ:LIB.inQ,inN:LIB.inN,inT:LIB.inT,tags:[...LIB.tags],purpose:LIB.purpose,work:LIB.work,person:LIB.person,scripture:LIB.scripture,sort:LIB.sort,pf:JSON.parse(JSON.stringify(LIB.pf||{}))}}
-function applyView(id){if(!id)return;const v=(DB.settings.saved_filters||[]).find(x=>x.id===id);if(!v)return;Object.assign(LIB,JSON.parse(JSON.stringify(v.filters)));if(!LIB.pf)LIB.pf={};LIB.sel=new Set();renderLibrary()}
-function saveView(){const name=prompt('Name this view (current search, filters, and sort will be saved):');if(!name)return;DB.settings.saved_filters=DB.settings.saved_filters||[];DB.settings.saved_filters.push({id:'v_'+Date.now().toString(36),name:name.trim(),filters:libSnapshot()});saveSettings();renderLibrary();toast('View saved')}
-function deleteView(){const el=$('lib-views');if(!el||!el.value){toast('Choose a saved view first');return}const v=(DB.settings.saved_filters||[]).find(x=>x.id===el.value);if(!confirm(`Delete saved view "${v?v.name:''}"?`))return;DB.settings.saved_filters=DB.settings.saved_filters.filter(x=>x.id!==el.value);saveSettings();renderLibrary()}
+/* The toolbar dropdown shows which saved view is active — until you change a filter, at which
+   point it's no longer that view and the dropdown says so. */
+let ACTIVE_VIEW=null;   // {id, snap}
+function activeViewId(){return(ACTIVE_VIEW&&JSON.stringify(libSnapshot())===ACTIVE_VIEW.snap)?ACTIVE_VIEW.id:null}
+function applyView(id){if(!id)return;const v=(DB.settings.saved_filters||[]).find(x=>x.id===id);if(!v)return;Object.assign(LIB,JSON.parse(JSON.stringify(v.filters)));if(!LIB.pf)LIB.pf={};LIB.sel=new Set();
+  ACTIVE_VIEW={id,snap:JSON.stringify(libSnapshot())};renderLibrary()}
+function saveView(){const name=prompt('Name this view (current search, filters, and sort will be saved):');if(!name)return;DB.settings.saved_filters=DB.settings.saved_filters||[];const nid='v_'+Date.now().toString(36);DB.settings.saved_filters.push({id:nid,name:name.trim(),filters:libSnapshot()});ACTIVE_VIEW={id:nid,snap:JSON.stringify(libSnapshot())};saveSettings();renderLibrary();toast('View saved')}
+function deleteView(id){const v=(DB.settings.saved_filters||[]).find(x=>x.id===id);if(!v)return;if(!confirm(`Delete saved view "${v.name}"?\n\nYour notes are not affected.`))return;
+  DB.settings.saved_filters=DB.settings.saved_filters.filter(x=>x.id!==id);if(ACTIVE_VIEW&&ACTIVE_VIEW.id===id)ACTIVE_VIEW=null;saveSettings();FILTERS_OPEN=true;renderLibrary()}
 function gotoWorkNotes(wid){LIB.q='';LIB.tags=[];LIB.purpose='';LIB.person='';LIB.scripture='';LIB.work=wid;LIB.sort='page';LIB.selMode=false;LIB.sel=new Set();LIB.pf={};showList();nav('notes')}
 function sortNotes(arr){
   const st=LIB.sort||'new';
@@ -3002,7 +3043,7 @@ function renderSettings(){
   ${healthCardHtml()}
   <div class="card set-section">
     <h3>Account</h3>
-    <p class="small muted">${esc((USER&&USER.email)||'')} · Notes on Books v2.7</p>
+    <p class="small muted">${esc((USER&&USER.email)||'')} · Notes on Books v2.8</p>
     <button class="btn sec" onclick="sb.auth.signOut().then(()=>location.reload())">Sign out</button>
   </div>`;
   const pinIn=$('pin-in');if(pinIn)makeAutocomplete(pinIn,allTags,{onEnter:v=>{pinIn.value=v;pin(v)}});
