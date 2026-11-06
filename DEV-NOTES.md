@@ -470,3 +470,16 @@ session-info tools for full history).
      works.pub is jsonb). Typing a known chapter title fills author + pages. Chicago bibliography:
      "…edited by X and Y, 33–52. Place: Publisher, Year." MLA: "…, Year, pp. 33–52." Token {part_pages}.
   Also fixed: a name ending in an initial got a double full stop in bibliographies ("Kapic, Kelly M..").
+
+- v2.10 (2026-11-06): chapter import. No DB migration.
+  1. When a book comes from Crossref (DOI paste, Parse, or Look up) and it's an edited volume
+     (editors, no authors), its chapters are fetched automatically: filter=isbn:X,type:book-chapter
+     (each of the book's ISBNs tried; title match as fallback) -> work.pub.parts with title, authors,
+     page range, DOI. Work dialog has a "Chapters (N)" list (× to remove one) and a
+     "📚 Find chapters online" button for existing works. mergeParts() never overwrites typed values.
+  2. Multi-author chapters: splitAuthorList()/joinNames(). Each named person is ensured on the
+     Authors list (ensurePartPeople), the filter matches any of them, Chicago bib inverts only the
+     first ("Ryrie, Alec, and Tom Schwanda"), short form "Ryrie and Schwanda" / "X et al.".
+     Picking a known chapter title also creates its authors as people.
+  3. Quote punctuation inside an inner single quote: "…of Man.'" (Chicago). Dutch particles
+     (op 't, 't, te) kept with the surname.

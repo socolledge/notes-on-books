@@ -261,6 +261,7 @@ table.tags td{border-bottom:1px solid var(--line);padding:6px 8px;font-size:13.5
 .ac-item{padding:7px 12px;cursor:pointer}
 .looktop{display:flex;align-items:center;gap:8px;margin:6px 0 4px}
 .lookscroll{max-height:260px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;padding:2px 4px}
+.parts{margin-top:8px}.parts summary{cursor:pointer;color:var(--accent)}
 .newppl{background:#fbf8f3;border:1px solid var(--line);border-radius:8px;padding:7px 9px;margin:6px 0}
 .ac-item:hover,.ac-item.on{background:var(--chip)}
 .sugg{border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:6px 0;font-size:13px;cursor:pointer}
@@ -791,6 +792,20 @@ function lastName(p){
 /* Chapters of an edited volume live on the BOOK, in work.pub.parts = [{title, author, pages}], so
    each chapter is entered once: its author and page range then fill in on every note that cites it.
    Notes still carry chapter_title/chapter_author (what the citation prints); pages come from here. */
+// a chapter's author text may name several people: "Alec Ryrie and Tom Schwanda", "A, B, and C"
+function splitAuthorList(t){
+  t=String(t||'').trim();if(!t)return[];
+  if(!/\s(and|&)\s|;/.test(t))return[t];
+  return t.split(/\s*(?:;|,?\s+(?:and|&)\s+|,\s+)\s*/).map(x=>x.trim()).filter(Boolean);
+}
+function joinNames(a){return a.length<2?(a[0]||''):a.length===2?a[0]+' and '+a[1]:a.slice(0,-1).join(', ')+', and '+a[a.length-1]}
+// bibliography form: first name inverted, the rest as written ("Ryrie, Alec, and Tom Schwanda")
+function partAuthorBib(t){
+  const ns=splitAuthorList(t);if(!ns.length)return'';
+  const p0=(typeof findPerson==='function')&&findPerson(ns[0]);
+  const first=p0&&p0.sort_name&&p0.sort_name.includes(',')?p0.sort_name:invertLoose(ns[0]);
+  return ns.length===1?first:ns.length===2?first+', and '+ns[1]:first+', '+ns.slice(1,-1).join(', ')+', and '+ns[ns.length-1];
+}
 const normPart=t=>String(t||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
 function workPart(w,title){if(!w||!title)return null;return((w.pub&&w.pub.parts)||[]).find(x=>normPart(x.title)===normPart(title))||null}
 function partPages(w,title){const x=workPart(w,title);return x&&x.pages?String(x.pages).replace(/-/g,'\u2013'):''}
@@ -815,7 +830,8 @@ function citeWork(work,opts){
     if(cs)return renderCustomStyle(cs,o,work,authors,editors,trans,pub,locs);
   }
   const T=t=>'<i>'+esc(t)+'</i>';
-  const Q=(t,p)=>'“'+esc(t)+(p||'')+'”';      // punctuation goes inside the quotes
+  // punctuation goes inside the quotes — including an inner single quote: “…of Man.’” not “…of Man’.”
+  const Q=(t,p)=>{t=String(t||'');const m=p&&t.match(/[\u2019']$/);return'“'+(m?esc(t.slice(0,-1))+p+m[0]:esc(t)+(p||''))+'”'};
   const url=(work.urls||[])[0]||'';
   const pages=String(pub.pages||'').replace(/-/g,'–');
   const pubBlock=()=>{ // "Place: Publisher, Year" with graceful fallbacks
@@ -829,7 +845,7 @@ function citeWork(work,opts){
   };
   // a part title (essay, treatise, discourse) inside the volume; its author defaults to the volume's
   const part=(o.chapter_title||'').trim(), partAuthor=(o.chapter_author||'').trim();
-  const whoNote=partAuthor||nameList(authors,false), whoBib=partAuthor?invertLoose(partAuthor):nameList(authors,true);
+  const whoNote=partAuthor||nameList(authors,false), whoBib=partAuthor?partAuthorBib(partAuthor):nameList(authors,true);
   // a name ending in an initial ("Kapic, Kelly M.") must not get a second full stop; a real "..." is left alone
   function wrap(h){h=h.replace(/(^|[^.])\.\.(?!\.)/g,'$1.');const d=document.createElement('div');d.innerHTML=h;return{html:h,text:d.textContent}}
 
@@ -1035,7 +1051,8 @@ function shortCiteObj(n){
   const last=lastName;   // real surname field — "Van Engen", not "Engen"
   let who = !ps.length?'' : ps.length===1?last(ps[0])
             : ps.length===2?(last(ps[0])+' and '+last(ps[1])) : (last(ps[0])+' et al.');
-  if(n.chapter_author){const cp=findPerson(n.chapter_author);who=cp?lastName(cp):String(n.chapter_author).trim().split(/\s+/).pop()}
+  if(n.chapter_author){const ls=splitAuthorList(n.chapter_author).map(a=>{const cp=findPerson(a);return cp?lastName(cp):a.split(/\s+/).pop()});
+    who=ls.length>2?ls[0]+' et al.':ls.join(' and ')}
   const locs=citeLocs(n.locators);
   // a part title, article or webpage is quoted in the short form; a book title is italicised
   const quoted=!!(n.chapter_title||'').trim()||workType(w)!=='book';
@@ -1419,7 +1436,7 @@ async function deleteNote(){
    ("Last, First Middle") are still written on every save — derived from the parts — so the
    citation formatter, sorting and older code paths keep working unchanged. */
 let HAS_NAME_COLS=false;   // set in loadAll(): true once the v2.6 SQL migration has been run
-const NAME_PARTICLES=/^(van|von|de|der|den|du|la|le|di|da|del|della|des|st\.?|ten|ter)$/i;
+const NAME_PARTICLES=/^(van|von|de|der|den|du|la|le|di|da|del|della|des|st\.?|ten|ter|op|op[\u2019']t|[\u2019']t|te)$/i;
 function splitName(raw){
   const t=String(raw||'').trim().replace(/\s+/g,' ').replace(/,\s*$/,'');
   if(!t)return{first:'',middle:'',last:''};
@@ -1568,7 +1585,14 @@ function renderWorkModal(){
       ${MW.source_status==='surrogate'?`<div class="fieldcol" style="flex:1"><label>Original work (link for citation)</label>
         <select onchange="MW.original_work_id=this.value||null"><option value="">— none yet —</option>${origOpts}</select></div>`:''}
     </div>
-    ${MW.source_status==='surrogate'?'<div class="warn">⚠️ Quotes from this work will carry a "cite original" reminder.</div>':''}`;
+    ${MW.source_status==='surrogate'?'<div class="warn">⚠️ Quotes from this work will carry a "cite original" reminder.</div>':''}
+    <details class="parts"${MW._showParts?' open':''}><summary class="small">Chapters (${(pub.parts||[]).length}) — for edited volumes and collected works</summary>
+      ${(pub.parts||[]).length?`<div class="lookscroll" style="max-height:200px">${pub.parts.map((x,i)=>`<div class="row small" style="margin:2px 0">
+        <span style="flex:1">${esc(x.title)}${x.author?' <span class="muted">— '+esc(x.author)+'</span>':''}</span><span class="muted">${esc(x.pages||'')}</span>
+        <span class="x" style="cursor:pointer" title="Remove from this list" onclick="MW.pub.parts.splice(${i},1);renderWorkModal()">×</span></div>`).join('')}</div>`
+      :'<p class="small muted" style="margin:4px 0">None yet. Chapters are added as you cite them on notes, or fetched below.</p>'}
+      <button class="btn sm sec" style="margin-top:6px" onclick="importChaptersIntoModal({isbns:MW.pub.isbn?[MW.pub.isbn]:[],title:MW.title,doi:MW.pub.doi})">📚 Find chapters online (Crossref)</button>
+    </details>`;
   }
   $('modal').innerHTML=`
   <h3>${MW.id?'Edit work':'New work'}</h3>
@@ -1649,10 +1673,50 @@ function crItem(it){
     people:(it.author||[]).map(crPerson),editors:(it.editor||[]).map(crPerson),
     journal:stripHtml((it['container-title']||[''])[0]),volume:it.volume||'',issue:it.issue||'',pages:it.page||'',
     year:dp[0]?String(dp[0]):'',doi:it.DOI||'',publisher:it.publisher||'',place:it['publisher-location']||'',
-    institution:((it.institution||[])[0]||{}).name||'',degree:(it.degree||[])[0]||''};
+    institution:((it.institution||[])[0]||{}).name||'',degree:(it.degree||[])[0]||'',isbns:it.ISBN||[]};
+}
+/* An edited volume's chapters are registered with Crossref under the book's ISBN, each with its own
+   title, authors and page range. Fetch them into the book's chapter list (work.pub.parts), so a note
+   only needs the chapter picked. Falls back to a title match if no ISBN works. */
+async function fetchChapters({isbns,title,doi}){
+  isbns=[...(isbns||[])];
+  if(!isbns.length&&doi){try{const j=await fetchJSON('https://api.crossref.org/works/'+encodeURIComponent(doi));isbns=j.message.ISBN||[];title=title||(j.message.title||[''])[0]}catch(e){}}
+  const sel='&rows=200&select=DOI,title,subtitle,author,page,container-title,type';
+  let items=[];
+  for(const isbn of isbns){
+    try{const j=await fetchJSON('https://api.crossref.org/works?filter=isbn:'+encodeURIComponent(String(isbn).replace(/[^0-9Xx]/g,''))+',type:book-chapter'+sel);
+      items=(j.message&&j.message.items)||[];if(items.length)break}catch(e){}
+  }
+  if(!items.length&&title){
+    try{const j=await fetchJSON('https://api.crossref.org/works?filter=type:book-chapter&query.container-title='+encodeURIComponent(title)+sel);
+      items=((j.message&&j.message.items)||[]).filter(it=>normPart((it['container-title']||[''])[0])===normPart(title))}catch(e){}
+  }
+  const first=pg=>{const m=String(pg||'').match(/\d+/);return m?+m[0]:1e9};
+  return items.filter(it=>(it.title||[]).length).map(it=>({
+    title:stripHtml((it.title||[''])[0]+(it.subtitle&&it.subtitle[0]?': '+it.subtitle[0]:'')),
+    author:joinNames((it.author||[]).map(a=>composeName(crPerson(a)).name).filter(Boolean)),
+    pages:it.page||'',doi:it.DOI||''})).sort((a,b)=>first(a.pages)-first(b.pages));
+}
+// merge fetched chapters into a book's list without overwriting anything you've typed
+function mergeParts(pub,found){
+  pub.parts=pub.parts||[];let added=0;
+  found.forEach(f=>{const ex=pub.parts.find(x=>normPart(x.title)===normPart(f.title));
+    if(ex){if(!ex.author)ex.author=f.author;if(!ex.pages)ex.pages=f.pages;if(!ex.doi)ex.doi=f.doi}
+    else{pub.parts.push(f);added++}});
+  return added;
+}
+async function importChaptersIntoModal(src){
+  if(!MW||MW.pub.type!=='book')return;
+  LOOK=LOOK||{items:[]};LOOK.note='looking for chapters…';renderLook();
+  const found=await fetchChapters(src);
+  if(!MW)return;
+  const added=mergeParts(MW.pub,found);MW._showParts=true;
+  LOOK.note=found.length?`found ${found.length} chapter${found.length===1?'':'s'} — they're listed below and saved with the work`:'no chapter list registered for this book';
+  renderWorkModal();
+  return added;
 }
 async function crossrefSearch(q,rows){
-  const j=await fetchJSON('https://api.crossref.org/works?rows='+(rows||5)+'&select=DOI,title,subtitle,author,editor,container-title,volume,issue,page,issued,published-print,published-online,approved,degree,type,publisher,publisher-location&query.bibliographic='+encodeURIComponent(q));
+  const j=await fetchJSON('https://api.crossref.org/works?rows='+(rows||5)+'&select=DOI,title,subtitle,author,editor,container-title,volume,issue,page,issued,published-print,published-online,approved,degree,type,publisher,publisher-location,ISBN&query.bibliographic='+encodeURIComponent(q));
   const items=((j.message&&j.message.items)||[]).filter(it=>(it.title||[]).length).map(crItem).filter(d=>d.kind!=='other');
   /* Crossref's search can't return a dissertation's institution ("institution" isn't selectable),
      so fetch the full record for those few hits. */
@@ -1730,9 +1794,12 @@ function applyLook(i){
     if(d.year&&!d.firstPub)MW.pub.year=d.year;
     else if(d.year&&!MW.pub.year)MW.pub.year=d.year;
     if(d.doi)MW.pub.doi=d.doi;
+    if((d.isbns||[]).length)MW.pub.isbn=d.isbns[0];
   }
   LOOK.note=d.firstPub&&d.editionCount>1?'year shown is first publication — choose an edition for yours':'';
   renderWorkModal();
+  // an edited volume from Crossref: bring in its chapters too
+  if(d.src==='Crossref'&&d.kind==='book'&&(d.editors||[]).length&&!(d.people||[]).length)importChaptersIntoModal({isbns:d.isbns,title:d.title,doi:d.doi});
 }
 async function loadEditions(i){
   const d=LOOK.items[i];if(!d||!d.olKey)return;
@@ -2345,24 +2412,32 @@ function upsertPart(w,title,patch){
   let x=workPart(w,title);if(!x){x={title,author:'',pages:''};w.pub.parts.push(x)}
   Object.assign(x,patch);savePartsOf(w);
 }
-function setPartTitle(v){
+async function setPartTitle(v){
   v=String(v||'').trim();CUR.chapter_title=v;
   const w=W(CUR.work_id),known=workPart(w,v);
-  if(known){CUR.chapter_title=known.title;if(known.author)CUR.chapter_author=known.author}   // fill from the book's chapter list
+  if(known){CUR.chapter_title=known.title;                                  // fill from the book's chapter list
+    if(known.author){CUR.chapter_author=await ensurePartPeople(known.author)}}
   else if(w&&v)upsertPart(w,v,{author:CUR.chapter_author||''});
   renderDetPanel();refreshCite();
+}
+// make sure every person named in a chapter-author string exists; returns the normalised string
+async function ensurePartPeople(text){
+  const out=[],added=[];
+  for(const a of splitAuthorList(text)){
+    if(isNotAName(a))continue;
+    let p=findPerson(a)||matchExistingPerson(splitName(a));
+    if(!p){try{p=P(await ensurePerson(a));added.push(p.name)}catch(e){return text}}
+    out.push(p.name);
+  }
+  if(added.length)toast('Added '+added.map(x=>'\u201c'+x+'\u201d').join(', ')+' to Authors');
+  return joinNames(out);
 }
 /* The part author becomes a real person (created if new, name split into parts), so chapter
    authors appear on the Authors page and in author filters. The note stores their display name. */
 async function setPartAuthor(v){
   v=String(v||'').trim();
   if(v&&isNotAName(v)){toast('\u201cet al.\u201d isn\u2019t a person \u2014 enter the first author');renderDetPanel();return}
-  let name=v;
-  if(v){
-    let p=findPerson(v)||matchExistingPerson(splitName(v));
-    if(!p){try{const id=await ensurePerson(v);p=P(id);toast('Added \u201c'+p.name+'\u201d to Authors')}catch(e){return}}
-    name=p.name;
-  }
+  const name=v?await ensurePartPeople(v):'';
   CUR.chapter_author=name;
   const w=W(CUR.work_id);if(w&&CUR.chapter_title)upsertPart(w,CUR.chapter_title,{author:name});
   renderDetPanel();refreshCite();
@@ -2647,8 +2722,9 @@ function togglePF(pkey,val){
   if(!arr.length)delete LIB.pf[pkey];
   renderLibrary();
 }
-const chapterPersonId=n=>{if(!n.chapter_author)return null;const p=findPerson(n.chapter_author);return p?p.id:null};
-const chaptersOf=pid=>{const seen=new Map();DB.notes.forEach(n=>{if(n.chapter_author&&chapterPersonId(n)===pid){const k=n.work_id+'|'+normPart(n.chapter_title);
+const chapterPersonIds=n=>splitAuthorList(n.chapter_author).map(a=>{const p=findPerson(a);return p?p.id:null}).filter(Boolean);
+const chapterPersonId=n=>chapterPersonIds(n)[0]||null;
+const chaptersOf=pid=>{const seen=new Map();DB.notes.forEach(n=>{if(n.chapter_author&&chapterPersonIds(n).includes(pid)){const k=n.work_id+'|'+normPart(n.chapter_title);
   if(!seen.has(k))seen.set(k,{work_id:n.work_id,title:n.chapter_title,count:0});seen.get(k).count++}});return[...seen.values()]};
 function libResults(){
   const q=LIB.q.trim().toLowerCase();
@@ -2656,7 +2732,7 @@ function libResults(){
   const res=DB.notes.filter(n=>{
     if(LIB.work&&n.work_id!==LIB.work)return false;
     // a chapter author matches only the notes from their chapter, not the whole edited volume
-    if(LIB.person){const w=W(n.work_id);if(!(w&&DB.wc.some(c=>c.work_id===w.id&&c.person_id===LIB.person))&&chapterPersonId(n)!==LIB.person)return false}
+    if(LIB.person){const w=W(n.work_id);if(!(w&&DB.wc.some(c=>c.work_id===w.id&&c.person_id===LIB.person))&&!chapterPersonIds(n).includes(LIB.person))return false}
     if(LIB.purpose&&!(n.purposes||[]).includes(LIB.purpose))return false;
     if(LIB.tags.length&&!LIB.tags.every(t=>(n.tags||[]).includes(t)))return false;
     if(LIB.scripture&&LIB.scripture.trim()){
@@ -2878,10 +2954,11 @@ function healthCount(){
    person is renamed or merged, so their chapters stay attached. */
 async function renameChapterAuthor(oldName,newName){
   const k=String(oldName||'').toLowerCase();if(!k||oldName===newName)return;
-  for(const n of DB.notes.filter(n=>(n.chapter_author||'').toLowerCase()===k)){
-    n.chapter_author=newName;await sb.from('notes').update({chapter_author:newName}).eq('id',n.id)}
-  if(CUR&&(CUR.chapter_author||'').toLowerCase()===k)CUR.chapter_author=newName;
-  for(const w of DB.works){const ps=(w.pub&&w.pub.parts)||[];let ch=false;ps.forEach(x=>{if((x.author||'').toLowerCase()===k){x.author=newName;ch=true}});if(ch)await savePartsOf(w)}
+  const swap=t=>{const ns=splitAuthorList(t);if(!ns.some(x=>x.toLowerCase()===k))return null;return joinNames(ns.map(x=>x.toLowerCase()===k?newName:x))};
+  for(const n of DB.notes){const v=swap(n.chapter_author);if(v===null)continue;
+    n.chapter_author=v;await sb.from('notes').update({chapter_author:v}).eq('id',n.id)}
+  if(CUR){const v=swap(CUR.chapter_author);if(v!==null)CUR.chapter_author=v}
+  for(const w of DB.works){const ps=(w.pub&&w.pub.parts)||[];let ch=false;ps.forEach(x=>{const v=swap(x.author);if(v!==null){x.author=v;ch=true}});if(ch)await savePartsOf(w)}
 }
 async function mergePeople(fromId,toId){
   if(fromId===toId)return;
@@ -2937,7 +3014,7 @@ function fixSortName(pid){
     toast('Sort name fixed');refreshActiveView();
   });
 }
-const orphanChapterAuthors=()=>[...new Set(DB.notes.map(n=>(n.chapter_author||'').trim()).filter(a=>a&&!isNotAName(a)&&!findPerson(a)))];
+const orphanChapterAuthors=()=>[...new Set(DB.notes.flatMap(n=>splitAuthorList(n.chapter_author)).filter(a=>a&&!isNotAName(a)&&!findPerson(a)))];
 async function addChapterAuthors(){const list=orphanChapterAuthors();for(const a of list){try{await ensurePerson(a)}catch(e){return}}
   toast(`Added ${list.length} author${list.length===1?'':'s'}`);refreshActiveView()}
 const peopleUnsplit=()=>HAS_NAME_COLS?DB.people.filter(p=>!p.last_name&&!p.first_name):[];
@@ -3118,7 +3195,7 @@ function renderSettings(){
   ${healthCardHtml()}
   <div class="card set-section">
     <h3>Account</h3>
-    <p class="small muted">${esc((USER&&USER.email)||'')} · Notes on Books v2.9</p>
+    <p class="small muted">${esc((USER&&USER.email)||'')} · Notes on Books v2.10</p>
     <button class="btn sec" onclick="sb.auth.signOut().then(()=>location.reload())">Sign out</button>
   </div>`;
   const pinIn=$('pin-in');if(pinIn)makeAutocomplete(pinIn,allTags,{onEnter:v=>{pinIn.value=v;pin(v)}});
