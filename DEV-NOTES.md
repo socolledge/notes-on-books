@@ -457,3 +457,16 @@ session-info tools for full history).
      continuation of the previous list in the same paste; numbers already in the item text; else
      one prompt ("What number is the first item?") defaulting to the clipboard's start.
   Test harness now kept in the project folder: test-harness/ (build-harness.sh + fake-supabase.js).
+
+- v2.9 (2026-11-06): chapters of edited volumes. No DB migration.
+  1. "+ New (same book)" keeps the cited part title and part author.
+  2. Chapter authors are real people: setPartAuthor() finds or creates the person (name split into
+     parts) and stores their display name on the note. The Authors filter matches a chapter author
+     only on notes from their chapter (chapterPersonId), not the whole volume; search includes part
+     title and author. Authors page/person modal show "N chapters" with a Notes link. Renames and
+     merges rewrite notes' chapter_author and the book's chapter list (renameChapterAuthor).
+     Library health offers "Add them" for chapter authors typed before v2.9.
+  3. Chapter page ranges: each book keeps work.pub.parts = [{title, author, pages}] (no migration —
+     works.pub is jsonb). Typing a known chapter title fills author + pages. Chicago bibliography:
+     "…edited by X and Y, 33–52. Place: Publisher, Year." MLA: "…, Year, pp. 33–52." Token {part_pages}.
+  Also fixed: a name ending in an initial got a double full stop in bibliographies ("Kapic, Kelly M..").

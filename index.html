@@ -788,6 +788,12 @@ function lastName(p){
   if(p.sort_name&&p.sort_name.includes(','))return p.sort_name.split(',')[0].trim();
   return String(p.name||'').trim().split(/\s+/).pop();
 }
+/* Chapters of an edited volume live on the BOOK, in work.pub.parts = [{title, author, pages}], so
+   each chapter is entered once: its author and page range then fill in on every note that cites it.
+   Notes still carry chapter_title/chapter_author (what the citation prints); pages come from here. */
+const normPart=t=>String(t||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+function workPart(w,title){if(!w||!title)return null;return((w.pub&&w.pub.parts)||[]).find(x=>normPart(x.title)===normPart(title))||null}
+function partPages(w,title){const x=workPart(w,title);return x&&x.pages?String(x.pages).replace(/-/g,'\u2013'):''}
 const WORK_TYPES={book:'Book',article:'Journal article',thesis:'Thesis / dissertation',web:'Webpage'};
 // Chicago's form for the degree: "PhD diss.", "ThM thesis", "MA thesis"
 function degreeLabel(d){d=String(d||'').trim();if(!d)return'PhD diss.';
@@ -824,7 +830,8 @@ function citeWork(work,opts){
   // a part title (essay, treatise, discourse) inside the volume; its author defaults to the volume's
   const part=(o.chapter_title||'').trim(), partAuthor=(o.chapter_author||'').trim();
   const whoNote=partAuthor||nameList(authors,false), whoBib=partAuthor?invertLoose(partAuthor):nameList(authors,true);
-  function wrap(h){const d=document.createElement('div');d.innerHTML=h;return{html:h,text:d.textContent}}
+  // a name ending in an initial ("Kapic, Kelly M.") must not get a second full stop; a real "..." is left alone
+  function wrap(h){h=h.replace(/(^|[^.])\.\.(?!\.)/g,'$1.');const d=document.createElement('div');d.innerHTML=h;return{html:h,text:d.textContent}}
 
   /* ---- journal articles ---- */
   if(type==='article'){
@@ -915,6 +922,7 @@ function citeWork(work,opts){
     if(part){
       s=(whoBib?esc(whoBib)+'. ':'')+Q(part,'.')+' '+T(work.title)+', ';
       if(editors.length)s+='edited by '+esc(nameList(editors,false))+', ';
+      var mlaPartPages=partPages(work,part);
     }else{
       if(authors.length)s=esc(nameList(authors,true))+'. ';
       else if(editors.length)s=esc(nameList(editors,true))+', editor'+(editors.length>1?'s':'')+'. ';
@@ -924,6 +932,7 @@ function citeWork(work,opts){
     const pb=[];
     if(pub.publisher)pb.push(esc(pub.publisher));else if(pub.imprint)pb.push(esc(pub.imprint.replace(/\s*::\s*/g,': ')));
     if(pub.year)pb.push(esc(pub.year));
+    if(part&&mlaPartPages)pb.push('pp. '+esc(mlaPartPages));
     s+=pb.join(', ')+'.';
     if(o.form==='note'&&locs)s+=' '+esc(locs)+'.';
     return wrap(s.replace(/,\s*\.$/,'.'));
@@ -934,6 +943,8 @@ function citeWork(work,opts){
     if(part){
       s=(whoBib?esc(whoBib)+'. ':'')+Q(part,'.')+' In '+T(work.title);
       if(editors.length)s+=', edited by '+esc(nameList(editors,false));
+      // Chicago puts the chapter's page range after the editors: "…edited by X and Y, 33–52."
+      const pp=partPages(work,part);if(pp)s+=', '+esc(pp);
       s+='. ';
     }else{
       if(authors.length)s=esc(nameList(authors,true))+'. ';
@@ -970,7 +981,7 @@ function renderCustomStyle(cs,o,work,authors,editors,trans,pub,locs){
   const map={authors:esc(nameList(authors,false)),authors_inv:esc(nameList(authors,true)),
     editors:esc(nameList(editors,false)),translators:esc(nameList(trans,false)),
     title:'<i>'+esc(work.title)+'</i>',title_plain:esc(work.title),
-    chapter_title:esc(o.chapter_title||''),chapter_author:esc(o.chapter_author||''),
+    chapter_title:esc(o.chapter_title||''),chapter_author:esc(o.chapter_author||''),part_pages:esc(partPages(work,o.chapter_title)),
     chapter_author_inv:esc(invertLoose(o.chapter_author||'')),
     place:esc((pub.place||'')),publisher:esc((pub.publisher||'')),year:esc((pub.year||'')),
     imprint:esc((pub.imprint||'').replace(/\s*::\s*/g,': ')),edition:esc((pub.edition||'')),pages:esc(locs||''),
@@ -1024,7 +1035,7 @@ function shortCiteObj(n){
   const last=lastName;   // real surname field — "Van Engen", not "Engen"
   let who = !ps.length?'' : ps.length===1?last(ps[0])
             : ps.length===2?(last(ps[0])+' and '+last(ps[1])) : (last(ps[0])+' et al.');
-  if(n.chapter_author)who=String(n.chapter_author).trim().split(/\s+/).pop();
+  if(n.chapter_author){const cp=findPerson(n.chapter_author);who=cp?lastName(cp):String(n.chapter_author).trim().split(/\s+/).pop()}
   const locs=citeLocs(n.locators);
   // a part title, article or webpage is quoted in the short form; a book title is italicised
   const quoted=!!(n.chapter_title||'').trim()||workType(w)!=='book';
@@ -2191,7 +2202,7 @@ function filtersPopHtml(){
       <select onchange="setLibPerson(this.value)"><option value="">any author</option>
         ${DB.people.map(p=>`<option value="${p.id}" ${LIB.person===p.id?'selected':''}>${esc(invertName(p))}</option>`).join('')}</select>
       <select onchange="LIB.work=this.value;renderNotes()"><option value="">${LIB.person?'any work by this author':'any work'}</option>
-        ${(LIB.person?DB.works.filter(w=>DB.wc.some(c=>c.work_id===w.id&&c.person_id===LIB.person)):DB.works)
+        ${(LIB.person?DB.works.filter(w=>DB.wc.some(c=>c.work_id===w.id&&c.person_id===LIB.person)||chaptersOf(LIB.person).some(c=>c.work_id===w.id)):DB.works)
           .map(w=>`<option value="${w.id}" ${LIB.work===w.id?'selected':''}>${esc(w.title)}</option>`).join('')}</select>
     </div></details>
     <details class="grp" open><summary>Saved views</summary><div class="gi">
@@ -2307,6 +2318,10 @@ function renderDetPanel(){
 }
 function wireDetPanel(){
   renderPurposeFields();initScriptureSelects();
+  const pt=$('pt-title');if(pt)makeAutocomplete(pt,()=>{const w=W(CUR.work_id);if(!w)return[];
+    const t=new Set(((w.pub&&w.pub.parts)||[]).map(x=>x.title));DB.notes.forEach(n=>{if(n.work_id===w.id&&n.chapter_title)t.add(n.chapter_title)});return[...t].sort()},
+    {onPick:v=>setPartTitle(v),onEnter:v=>setPartTitle(v)});
+  const pa=$('pt-author');if(pa)makeAutocomplete(pa,()=>DB.people.map(p=>p.name),{onPick:v=>setPartAuthor(v),onEnter:v=>setPartAuthor(v)});
   const ti=$('tag-in');if(ti)makeAutocomplete(ti,allTags,{onEnter:v=>{ti.value=v;addTagFromInput()},onPick:v=>{ti.value=v;addTagFromInput()}});
 }
 function purposeSummaryHtml(){
@@ -2323,6 +2338,38 @@ function chapterToPart(i){
   const l=CUR.locators[i];if(!l)return;
   CUR.chapter_title=l.value;CUR.locators.splice(i,1);
   UI.open.cite=true;saveUI();renderDetPanel();refreshCite();toast('Now cited as a part title');
+}
+async function savePartsOf(w){const{error}=await sb.from('works').update({pub:w.pub}).eq('id',w.id);if(error)toast(error.message)}
+function upsertPart(w,title,patch){
+  if(!w||!title)return;w.pub=w.pub||{};w.pub.parts=w.pub.parts||[];
+  let x=workPart(w,title);if(!x){x={title,author:'',pages:''};w.pub.parts.push(x)}
+  Object.assign(x,patch);savePartsOf(w);
+}
+function setPartTitle(v){
+  v=String(v||'').trim();CUR.chapter_title=v;
+  const w=W(CUR.work_id),known=workPart(w,v);
+  if(known){CUR.chapter_title=known.title;if(known.author)CUR.chapter_author=known.author}   // fill from the book's chapter list
+  else if(w&&v)upsertPart(w,v,{author:CUR.chapter_author||''});
+  renderDetPanel();refreshCite();
+}
+/* The part author becomes a real person (created if new, name split into parts), so chapter
+   authors appear on the Authors page and in author filters. The note stores their display name. */
+async function setPartAuthor(v){
+  v=String(v||'').trim();
+  if(v&&isNotAName(v)){toast('\u201cet al.\u201d isn\u2019t a person \u2014 enter the first author');renderDetPanel();return}
+  let name=v;
+  if(v){
+    let p=findPerson(v)||matchExistingPerson(splitName(v));
+    if(!p){try{const id=await ensurePerson(v);p=P(id);toast('Added \u201c'+p.name+'\u201d to Authors')}catch(e){return}}
+    name=p.name;
+  }
+  CUR.chapter_author=name;
+  const w=W(CUR.work_id);if(w&&CUR.chapter_title)upsertPart(w,CUR.chapter_title,{author:name});
+  renderDetPanel();refreshCite();
+}
+function setPartPages(v){
+  const w=W(CUR.work_id);if(!w||!CUR.chapter_title)return;
+  upsertPart(w,CUR.chapter_title,{pages:String(v||'').trim()});refreshCite();
 }
 function detPanelHtml(){
   const w=W(CUR.work_id);
@@ -2355,10 +2402,11 @@ function detPanelHtml(){
           <div class="row" style="margin-top:7px">
             <button class="btn sm sec" onclick="openWorkModal(null)">+ New work</button>
             ${w?`<button class="btn sm sec" onclick="openWorkModal('${w.id}')">Edit work</button>`:''}</div>
-          <label title="A discourse, treatise, sermon or essay inside the volume — it appears in the citation">Cited part title</label>
-          <input placeholder="e.g. A Discourse of Delight in Prayer" value="${esc(CUR.chapter_title)}" onchange="CUR.chapter_title=this.value;refreshCite()" style="width:100%">
-          <input placeholder="Part author (only if different from the volume)" value="${esc(CUR.chapter_author)}" onchange="CUR.chapter_author=this.value;refreshCite()" style="width:100%;margin-top:5px">
-          <p class="small muted" style="margin:5px 0 0">For a discourse or treatise within a collected works volume, or an essay in an edited book. Chapter <i>locators</i> are for your own navigation and are left out of citations.</p>
+          <label title="A chapter, essay, discourse or treatise inside the volume — it appears in the citation">Cited part (chapter / essay)</label>
+          <input id="pt-title" placeholder="Title — e.g. A Discourse of Delight in Prayer" value="${esc(CUR.chapter_title)}" autocomplete="off" onchange="setPartTitle(this.value)" style="width:100%">
+          <input id="pt-author" placeholder="Its author (only if not the volume's)" value="${esc(CUR.chapter_author)}" autocomplete="off" onchange="setPartAuthor(this.value)" style="width:100%;margin-top:5px">
+          <input id="pt-pages" placeholder="Its page range, e.g. 33–52 (for the bibliography)" value="${esc(w&&CUR.chapter_title?((workPart(w,CUR.chapter_title)||{}).pages||''):'')}" onchange="setPartPages(this.value)" style="width:100%;margin-top:5px" ${CUR.chapter_title?'':'disabled'}>
+          <p class="small muted" style="margin:5px 0 0">Each chapter is remembered on the book: next time, start typing its title and the author and pages fill in. Chapter authors are added to your Authors list. Chapter <i>locators</i> are just for your own navigation and stay out of citations.</p>
         </div>`:''}
       </div>
       <div class="blk${O.tags?' open':''}" data-sec="tags">
@@ -2428,8 +2476,9 @@ async function stepNote(d){
 }
 async function newNoteSameBook(){
   if(!CUR||!CUR.work_id){toast('Select a work first');return}
-  const wid=CUR.work_id,a=CUR._authorSel,p=[...(CUR.purposes||[])];
-  await flushSave();CUR=blankNote();CUR.work_id=wid;CUR._authorSel=a;CUR.purposes=p;
+  // keeps the chapter too, so a run of quotes from one essay doesn't mean retyping it each time
+  const wid=CUR.work_id,a=CUR._authorSel,p=[...(CUR.purposes||[])],ct=CUR.chapter_title||'',ca=CUR.chapter_author||'';
+  await flushSave();CUR=blankNote();CUR.work_id=wid;CUR._authorSel=a;CUR.purposes=p;CUR.chapter_title=ct;CUR.chapter_author=ca;
   showDetail();renderNotes();
 }
 async function duplicateNote(){
@@ -2484,6 +2533,7 @@ function applyView(id){if(!id)return;const v=(DB.settings.saved_filters||[]).fin
 function saveView(){const name=prompt('Name this view (current search, filters, and sort will be saved):');if(!name)return;DB.settings.saved_filters=DB.settings.saved_filters||[];const nid='v_'+Date.now().toString(36);DB.settings.saved_filters.push({id:nid,name:name.trim(),filters:libSnapshot()});ACTIVE_VIEW={id:nid,snap:JSON.stringify(libSnapshot())};saveSettings();renderLibrary();toast('View saved')}
 function deleteView(id){const v=(DB.settings.saved_filters||[]).find(x=>x.id===id);if(!v)return;if(!confirm(`Delete saved view "${v.name}"?\n\nYour notes are not affected.`))return;
   DB.settings.saved_filters=DB.settings.saved_filters.filter(x=>x.id!==id);if(ACTIVE_VIEW&&ACTIVE_VIEW.id===id)ACTIVE_VIEW=null;saveSettings();FILTERS_OPEN=true;renderLibrary()}
+function gotoChapterNotes(pid,wid){gotoWorkNotes(wid);LIB.person=pid;renderNotes()}
 function gotoWorkNotes(wid){LIB.q='';LIB.tags=[];LIB.purpose='';LIB.person='';LIB.scripture='';LIB.work=wid;LIB.sort='page';LIB.selMode=false;LIB.sel=new Set();LIB.pf={};showList();nav('notes')}
 function sortNotes(arr){
   const st=LIB.sort||'new';
@@ -2597,12 +2647,16 @@ function togglePF(pkey,val){
   if(!arr.length)delete LIB.pf[pkey];
   renderLibrary();
 }
+const chapterPersonId=n=>{if(!n.chapter_author)return null;const p=findPerson(n.chapter_author);return p?p.id:null};
+const chaptersOf=pid=>{const seen=new Map();DB.notes.forEach(n=>{if(n.chapter_author&&chapterPersonId(n)===pid){const k=n.work_id+'|'+normPart(n.chapter_title);
+  if(!seen.has(k))seen.set(k,{work_id:n.work_id,title:n.chapter_title,count:0});seen.get(k).count++}});return[...seen.values()]};
 function libResults(){
   const q=LIB.q.trim().toLowerCase();
   const toks=q?q.split(/\s+/):[];
   const res=DB.notes.filter(n=>{
     if(LIB.work&&n.work_id!==LIB.work)return false;
-    if(LIB.person){const w=W(n.work_id);if(!w||!DB.wc.some(c=>c.work_id===w.id&&c.person_id===LIB.person))return false}
+    // a chapter author matches only the notes from their chapter, not the whole edited volume
+    if(LIB.person){const w=W(n.work_id);if(!(w&&DB.wc.some(c=>c.work_id===w.id&&c.person_id===LIB.person))&&chapterPersonId(n)!==LIB.person)return false}
     if(LIB.purpose&&!(n.purposes||[]).includes(LIB.purpose))return false;
     if(LIB.tags.length&&!LIB.tags.every(t=>(n.tags||[]).includes(t)))return false;
     if(LIB.scripture&&LIB.scripture.trim()){
@@ -2622,6 +2676,8 @@ function libResults(){
     if(LIB.inN)hay+=' '+stripHtml(n.note_html).toLowerCase();
     if(LIB.inT)hay+=' '+(n.tags||[]).join(' ').toLowerCase();
     if(w){hay+=' '+w.title.toLowerCase();contribs(w.id).forEach(p=>hay+=' '+p.name.toLowerCase())}
+    if(n.chapter_title)hay+=' '+n.chapter_title.toLowerCase();
+    if(n.chapter_author)hay+=' '+n.chapter_author.toLowerCase();
     return toks.every(t=>hay.includes(t));
   });
   return sortNotes(res);
@@ -2691,11 +2747,11 @@ function renderPeople(){
   $('view-people').innerHTML=`<div class="row" style="margin-bottom:10px"><h2 style="margin:0;flex:1">Authors & contributors</h2>
     <button class="btn sm" onclick="openPersonModal(null)">+ New person</button></div>`+
   DB.people.map(p=>{
-    const wn=DB.wc.filter(c=>c.person_id===p.id).length;
+    const wn=DB.wc.filter(c=>c.person_id===p.id).length, cn=chaptersOf(p.id).length;
     return `<div class="list-item" onclick="openPersonModal('${p.id}')">
       <div class="grow"><b>${esc(invertName(p))}</b>${p.dates?' <span class="small muted">('+esc(p.dates)+')</span>':''}
       ${(p.urls||[]).map(u=>` <a class="small" href="${esc(u)}" target="_blank" onclick="event.stopPropagation()">link</a>`).join('')}</div>
-      <span class="chip">${wn} work${wn===1?'':'s'}</span></div>`;
+      <span class="chip">${wn||!cn?wn+' work'+(wn===1?'':'s'):''}${wn&&cn?' · ':''}${cn?cn+' chapter'+(cn===1?'':'s'):''}</span></div>`;
   }).join('');
 }
 function openPersonModal(pid){
@@ -2721,7 +2777,9 @@ function renderPersonModal(){
     <label>Sort name (Last, First)</label><input style="width:100%" value="${esc(MP.sort_name)}" onchange="MP.sort_name=this.value">`}
   ${MP.id?(()=>{const rows=DB.wc.filter(c=>c.person_id===MP.id);
     return `<label>Works (${rows.length})</label>${rows.length?rows.map(c=>{const w=W(c.work_id);return w?`<div class="row" style="margin:2px 0"><span class="small" style="flex:1">${esc(w.title)} <span class="muted">· ${esc(c.role)}</span></span>
-      <button class="btn sm sec" onclick="openWorkModal('${w.id}')">Open</button></div>`:''}).join(''):'<p class="small muted" style="margin:2px 0">None yet.</p>'}`})():''}
+      <button class="btn sm sec" onclick="openWorkModal('${w.id}')">Open</button></div>`:''}).join(''):'<p class="small muted" style="margin:2px 0">None yet.</p>'}
+    ${(()=>{const ch=chaptersOf(MP.id);return ch.length?`<label>Chapters in edited volumes (${ch.length})</label>${ch.map(c=>{const w=W(c.work_id);return `<div class="row" style="margin:2px 0"><span class="small" style="flex:1">\u201c${esc(c.title||'(untitled)')}\u201d <span class="muted">in ${esc(w?w.title:'?')} · ${c.count} note${c.count===1?'':'s'}</span></span>
+      <button class="btn sm sec" onclick="closeModal();gotoChapterNotes('${MP.id}','${c.work_id}')">Notes</button></div>`}).join('')}`:''})()}`})():''}
   <label>Dates (e.g. 1616–1683)</label><input value="${esc(MP.dates)}" onchange="MP.dates=this.value">
   <label>URLs (one per line — bio pages etc.)</label>
   <textarea style="width:100%" rows="2" onchange="MP.urls=this.value.split('\\n').map(s=>s.trim()).filter(Boolean)">${esc((MP.urls||[]).join('\n'))}</textarea>
@@ -2750,7 +2808,8 @@ async function savePerson(){
     rec={name:nm.name,sort_name:MP.sort_name.trim()||nm.sort_name};
   }
   Object.assign(rec,{dates:MP.dates,notes:MP.notes,urls:MP.urls,tags:MP.tags});
-  if(MP.id){const{error}=await sb.from('people').update(rec).eq('id',MP.id);if(error){toast(error.message);return}Object.assign(P(MP.id),rec)}
+  if(MP.id){const oldName=P(MP.id).name;const{error}=await sb.from('people').update(rec).eq('id',MP.id);if(error){toast(error.message);return}
+    Object.assign(P(MP.id),rec);if(oldName!==rec.name)await renameChapterAuthor(oldName,rec.name)}
   else{
     if(findPerson(rec.name)&&!confirm(`"${rec.name}" already exists. Create a second person with the same name anyway?`))return;
     const{data,error}=await sb.from('people').insert(rec).select().single();if(error){toast(error.message);return}DB.people.push(data)}
@@ -2815,6 +2874,15 @@ function healthCount(){
 /* Move every contribution from one author to another, then delete the empty one.
    Fills any blank biographical field on the surviving record from the one being merged
    away, so nothing is silently lost. */
+/* Notes store a chapter author's name as text; rewrite it (and the book's chapter list) when the
+   person is renamed or merged, so their chapters stay attached. */
+async function renameChapterAuthor(oldName,newName){
+  const k=String(oldName||'').toLowerCase();if(!k||oldName===newName)return;
+  for(const n of DB.notes.filter(n=>(n.chapter_author||'').toLowerCase()===k)){
+    n.chapter_author=newName;await sb.from('notes').update({chapter_author:newName}).eq('id',n.id)}
+  if(CUR&&(CUR.chapter_author||'').toLowerCase()===k)CUR.chapter_author=newName;
+  for(const w of DB.works){const ps=(w.pub&&w.pub.parts)||[];let ch=false;ps.forEach(x=>{if((x.author||'').toLowerCase()===k){x.author=newName;ch=true}});if(ch)await savePartsOf(w)}
+}
 async function mergePeople(fromId,toId){
   if(fromId===toId)return;
   const from=P(fromId), to=P(toId);
@@ -2840,9 +2908,11 @@ async function mergePeople(fromId,toId){
     if(error){toast(error.message);return}
     Object.assign(to,carry);
   }
+  const fromName=from.name;
   const{error}=await sb.from('people').delete().eq('id',fromId);
   if(error){toast(error.message);return}
   DB.people=DB.people.filter(x=>x.id!==fromId);
+  await renameChapterAuthor(fromName,to.name);
   toast('Merged into '+to.name);
 }
 async function doMergeFromModal(){
@@ -2867,6 +2937,9 @@ function fixSortName(pid){
     toast('Sort name fixed');refreshActiveView();
   });
 }
+const orphanChapterAuthors=()=>[...new Set(DB.notes.map(n=>(n.chapter_author||'').trim()).filter(a=>a&&!isNotAName(a)&&!findPerson(a)))];
+async function addChapterAuthors(){const list=orphanChapterAuthors();for(const a of list){try{await ensurePerson(a)}catch(e){return}}
+  toast(`Added ${list.length} author${list.length===1?'':'s'}`);refreshActiveView()}
 const peopleUnsplit=()=>HAS_NAME_COLS?DB.people.filter(p=>!p.last_name&&!p.first_name):[];
 /* One-time (and repeatable) split of existing names into first/middle/last. Every proposal is
    shown and editable before anything is written. */
@@ -2910,6 +2983,8 @@ function healthCardHtml(){
   return `<div class="card set-section">
     <h3>Library health ${total?'<span class="badge">'+total+'</span>':''}</h3>
     ${!HAS_NAME_COLS?`<div class="warn" style="margin-bottom:8px">Database update needed for v2.6 name fields — run the SQL in the v2.6 release notes, then reload.</div>`:''}
+    ${orphanChapterAuthors().length?`<div class="row" style="margin:6px 0 10px"><span class="small" style="flex:1"><b>${orphanChapterAuthors().length}</b> chapter author${orphanChapterAuthors().length===1?'':'s'} not yet in your Authors list (${esc(orphanChapterAuthors().slice(0,4).join(', '))}${orphanChapterAuthors().length>4?'…':''}).</span>
+      <button class="btn sm" onclick="addChapterAuthors()">Add them</button></div>`:''}
     ${unsplit.length?`<div class="row" style="margin:6px 0 10px"><span class="small" style="flex:1"><b>${unsplit.length}</b> author${unsplit.length===1?'':'s'} not yet split into first / middle / last name.</span>
       <button class="btn sm" onclick="openSplitReview()">Review &amp; split</button></div>`:''}
     <p class="small muted">Only genuine faults are listed — things that break a citation or hide a
@@ -2969,7 +3044,7 @@ function renderSettings(){
         <label>Style name</label><input id="cs-name" placeholder="SBL">
         <label>Footnote template</label><input id="cs-note" style="width:100%" placeholder="{authors}, {title} ({place}: {publisher}, {year}), {pages}.">
         <label>Bibliography template</label><input id="cs-bib" style="width:100%" placeholder="{authors_inv}. {title}. {place}: {publisher}, {year}.">
-        <p class="small muted">Tokens: {authors} {authors_inv} {editors} {translators} {title} {title_plain} {chapter_title} {chapter_author} {chapter_author_inv} {place} {publisher} {year} {edition} {imprint} {pages} — articles: {journal} {volume} {issue} {article_pages} {doi} — theses: {degree} {institution} — webpages: {site} {url} {accessed}. Empty values and stray punctuation are tidied automatically.</p>
+        <p class="small muted">Tokens: {authors} {authors_inv} {editors} {translators} {title} {title_plain} {chapter_title} {chapter_author} {chapter_author_inv} {part_pages} {place} {publisher} {year} {edition} {imprint} {pages} — articles: {journal} {volume} {issue} {article_pages} {doi} — theses: {degree} {institution} — webpages: {site} {url} {accessed}. Empty values and stray punctuation are tidied automatically.</p>
         <button class="btn sm" onclick="addCustomStyle()" style="margin-top:6px">Save style</button>
       </details>
     </div>
@@ -3043,7 +3118,7 @@ function renderSettings(){
   ${healthCardHtml()}
   <div class="card set-section">
     <h3>Account</h3>
-    <p class="small muted">${esc((USER&&USER.email)||'')} · Notes on Books v2.8</p>
+    <p class="small muted">${esc((USER&&USER.email)||'')} · Notes on Books v2.9</p>
     <button class="btn sec" onclick="sb.auth.signOut().then(()=>location.reload())">Sign out</button>
   </div>`;
   const pinIn=$('pin-in');if(pinIn)makeAutocomplete(pinIn,allTags,{onEnter:v=>{pinIn.value=v;pin(v)}});
