@@ -483,3 +483,10 @@ session-info tools for full history).
      Picking a known chapter title also creates its authors as people.
   3. Quote punctuation inside an inner single quote: "…of Man.'" (Chicago). Dutch particles
      (op 't, 't, te) kept with the surname.
+
+## v2.11 — 2026-11-08 — Kindle import into edited volumes
+- `finishKindleImport` now calls `kiChapterLinks(work, ki)`: Kindle section headings are matched to the book's chapter list (`work.pub.parts`) and matching notes get `chapter_title` + `chapter_author` (people created via `ensurePartPeople`) instead of a plain "chapter" locator. Page range prints from the parts registry as before; page and Kindle-location locators are kept.
+- If the book has no chapter list yet, it is fetched from Crossref first (`fetchChapters` by ISBN/DOI/title) and saved on the work.
+- Only applies to edited volumes (`kiIsEditedVolume`: editors on the work, or chapter authors who aren't the book's authors), so monographs whose publishers register chapters are untouched.
+- `kiMatchPart`: strips "Chapter 3", "3.", "3 " prefixes; exact title, main title (before the colon), prefix match, then word-overlap with a clear-winner rule. Front/back matter headings (`KI_SKIP_HEAD`: Contents, Notes, Index, Acknowledgements, Notes on Contributors…) never match; unmatched headings fall back to the old chapter locator.
+- Import toast reports "N cited to their chapter".

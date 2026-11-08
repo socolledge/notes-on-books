@@ -2124,17 +2124,81 @@ async function kiContinue(){
     renderWorkModal();snapModal('work');
   }
 }
+/* v2.11 — Kindle import into an edited volume. Kindle's section headings ("3. 'The Supreme Happiness
+   of Man': Thomas Goodwin…", "Chapter 3 Title", or just the main title without its subtitle) are matched
+   against the book's chapter list (work.pub.parts), so each imported note is cited as that chapter:
+   title + chapter author(s) on the note, page range from the book's list. */
+const KI_SKIP_HEAD=/^(contents|table of contents|notes|endnotes|index|bibliography|select bibliography|acknowledg(e)?ments|list of (figures|tables|illustrations|contributors|abbreviations)|notes on (the )?contributors|abbreviations|copyright|title page|cover|dedication|series editors?'? preface)$/;
+function kiHeadKey(h){
+  return normPart(String(h||'')
+    .replace(/^\s*(chapter|ch\.?|part)\s+([0-9]+|[ivxlc]+)\b[.:\-\u2013\u2014]?\s*/i,'')
+    .replace(/^\s*([0-9]+|[ivxlc]+)[.:)\-\u2013\u2014]\s+/i,'')
+    .replace(/^\s*[0-9]+\s+(?=[A-Za-z\u2018\u201c'"])/,''));
+}
+function kiMatchPart(parts,heading){
+  const hk=kiHeadKey(heading);if(!hk||hk.length<3)return null;
+  let best=null,bestScore=0;
+  for(const x of parts){
+    const full=normPart(x.title),main=normPart(String(x.title).split(/:\s/)[0]);
+    let sc=0;
+    if(hk===full)sc=4;
+    else if(hk===main&&main.length>=6)sc=3;
+    else if(hk.length>=10&&(full.startsWith(hk)||hk.startsWith(full)))sc=2;
+    else if(main.length>=10&&hk.startsWith(main))sc=1.5;
+    if(sc>bestScore){bestScore=sc;best=x}
+  }
+  if(best)return best;
+  // looser: the heading and a chapter share most of their significant words (only if one chapter clearly wins)
+  const words=t=>new Set(normPart(t).split(' ').filter(w=>w.length>=4&&!KI_STOP.has(w)));
+  const hw=words(hk);if(hw.size<2)return null;
+  const scored=parts.map(x=>{const pw=words(x.title);let c=0;hw.forEach(w=>{if(pw.has(w))c++});
+    return{x,c,sc:pw.size?(c<2?0:Math.min(c/Math.min(hw.size,pw.size),1)*.6+c/Math.max(hw.size,pw.size)*.4):0}}).sort((a,b)=>b.sc-a.sc);
+  if(scored[0]&&scored[0].sc>=.6&&(!scored[1]||scored[0].sc-scored[1].sc>=.2))return scored[0].x;
+  return null;
+}
+const KI_STOP=new Set(['with','from','that','this','their','into','upon','early','modern','century','thought','writings','writing','some','study','introduction','conclusion']);
+// is this book an edited volume? editors on the work, or chapters by people who aren't the book's authors
+function kiIsEditedVolume(w,parts){
+  if(contribs(w.id,'editor').length)return true;
+  const own=new Set(contribs(w.id,'author').map(p=>lastName(p).toLowerCase()));
+  return parts.some(x=>splitAuthorList(x.author).some(a=>!own.has(String(a).trim().split(/\s+/).pop().toLowerCase())));
+}
+async function kiChapterLinks(w,ki){
+  const map=new Map();if(!w||(w.pub&&w.pub.type&&w.pub.type!=='book'))return map;
+  let parts=(w.pub&&w.pub.parts)||[];
+  const heads=[...new Set(ki.entries.map(e=>e.chapter).filter(Boolean))];
+  if(!heads.length)return map;
+  if(!parts.length){
+    const st=$('ki-status');if(st)st.textContent='Looking up the book\u2019s chapters on Crossref…';
+    let found=[];try{found=await fetchChapters({isbns:w.pub&&w.pub.isbn?[w.pub.isbn]:[],title:w.title,doi:w.pub&&w.pub.doi})}catch(e){}
+    if(found.length&&kiIsEditedVolume(w,found)){w.pub=w.pub||{};mergeParts(w.pub,found);await savePartsOf(w);parts=w.pub.parts;
+      toast(`Found ${found.length} chapters for this book on Crossref`)}
+  }
+  if(!parts.length||!kiIsEditedVolume(w,parts))return map;
+  const authorDone=new Map();
+  for(const h of heads){
+    if(KI_SKIP_HEAD.test(normPart(h)))continue;
+    const x=kiMatchPart(parts,h);if(!x)continue;
+    let a=x.author||'';
+    if(a){if(!authorDone.has(a))authorDone.set(a,await ensurePartPeople(a));a=authorDone.get(a)}
+    map.set(h,{title:x.title,author:a});
+  }
+  return map;
+}
 async function finishKindleImport(wid,ki){
   const have=new Set(DB.notes.filter(n=>n.work_id===wid).flatMap(n=>(n.locators||[]).filter(l=>l.type==='kindle').map(l=>String(l.value))));
   const fresh=ki.entries.filter(e=>!(e.loc&&have.has(String(e.loc))));
   const skipped=ki.entries.length-fresh.length;
+  let links=new Map();try{links=await kiChapterLinks(W(wid),{entries:fresh})}catch(e){console.warn(e)}
+  let linked=0;
   const recs=fresh.map(e=>{
-    const locators=[];
-    if(e.chapter)locators.push({type:'chapter',value:e.chapter});
+    const locators=[],cp=e.chapter&&links.get(e.chapter);
+    if(cp)linked++;
+    else if(e.chapter)locators.push({type:'chapter',value:e.chapter});
     if(e.page)locators.push({type:'page',value:e.page});
     if(e.loc)locators.push({type:'kindle',value:e.loc});
     return{work_id:wid,quote_html:e.quote?textToHtml(e.quote):'',note_html:e.note?textToHtml(e.note):'',
-      locators,tags:[],purposes:[...ki.purposes],purpose_values:{},chapter_title:'',chapter_author:'',date_added:new Date().toISOString()};
+      locators,tags:[],purposes:[...ki.purposes],purpose_values:{},chapter_title:cp?cp.title:'',chapter_author:cp?cp.author:'',date_added:new Date().toISOString()};
   });
   let inserted=0;
   for(let i=0;i<recs.length;i+=200){
@@ -2143,7 +2207,7 @@ async function finishKindleImport(wid,ki){
     DB.notes.push(...data);inserted+=data.length;
   }
   closeModal();
-  toast(`Imported ${inserted} note${inserted===1?'':'s'}${skipped?` (${skipped} already present, skipped)`:''}`);
+  toast(`Imported ${inserted} note${inserted===1?'':'s'}${linked?` \u2014 ${linked} cited to their chapter`:''}${skipped?` (${skipped} already present, skipped)`:''}`);
   gotoWorkNotes(wid);
 }
 
@@ -3195,7 +3259,7 @@ function renderSettings(){
   ${healthCardHtml()}
   <div class="card set-section">
     <h3>Account</h3>
-    <p class="small muted">${esc((USER&&USER.email)||'')} · Notes on Books v2.10</p>
+    <p class="small muted">${esc((USER&&USER.email)||'')} · Notes on Books v2.11</p>
     <button class="btn sec" onclick="sb.auth.signOut().then(()=>location.reload())">Sign out</button>
   </div>`;
   const pinIn=$('pin-in');if(pinIn)makeAutocomplete(pinIn,allTags,{onEnter:v=>{pinIn.value=v;pin(v)}});
