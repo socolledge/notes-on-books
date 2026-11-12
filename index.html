@@ -2011,6 +2011,18 @@ function parseKindleCitation(citHtml){
   if(pm){out.publisher=pm[1].trim();out.year=pm[2]}
   return out;
 }
+/* Kindle anchors a note at the END of the highlight it comments on, so a highlight that spans
+   several locations has a note at a later location (v2.12; before this only identical locations paired).
+   A note that directly follows its highlight in the export belongs to it when its location falls
+   within the highlight's span (≈ 1 location per 100 characters, plus slack), or — exports with
+   page numbers but no locations — when it's on the same or the next page. */
+function kiNoteBelongs(h,n){
+  if(h.chapter!==n.chapter)return false;
+  const hl=parseInt(h.loc,10),nl=parseInt(n.loc,10);
+  if(!isNaN(hl)&&!isNaN(nl)){const d=nl-hl;return d>=0&&d<=Math.ceil((h.text||'').length/100)+3}
+  if(h.page&&n.page){if(h.page===n.page)return true;const hp=parseInt(h.page,10),np=parseInt(n.page,10);return !isNaN(hp)&&np===hp+1}
+  return false;
+}
 function parseKindleHtml(html){
   const doc=new DOMParser().parseFromString(html,'text/html');
   const bodyC=doc.querySelector('.bodyContainer');
@@ -2044,9 +2056,9 @@ function parseKindleHtml(html){
   for(let i=0;i<raw.length;i++){
     const r=raw[i];
     if(r.kind==='highlight'){
-      const nxt=raw[i+1];
-      if(nxt&&nxt.kind==='note'&&r.loc&&nxt.loc===r.loc){entries.push({quote:r.text,note:nxt.text,page:r.page,loc:r.loc,chapter:r.chapter});i++}
-      else entries.push({quote:r.text,note:'',page:r.page,loc:r.loc,chapter:r.chapter});
+      const notes=[];                                   // a highlight can carry several notes
+      while(raw[i+1]&&raw[i+1].kind==='note'&&kiNoteBelongs(r,raw[i+1])){notes.push(raw[i+1].text);i++}
+      entries.push({quote:r.text,note:notes.join('\n\n'),page:r.page,loc:r.loc,chapter:r.chapter});
     }else entries.push({quote:'',note:r.text,page:r.page,loc:r.loc,chapter:r.chapter});
   }
   if(!entries.length)throw new Error('No highlights or notes found in this file.');
@@ -2070,7 +2082,7 @@ function kindleMatchWorks(title,authors){
     let ts=0;
     if(nt&&wt){
       if(nt===wt)ts=1;
-      else if(nt.includes(wt)||wt.includes(nt))ts=.7;
+      else if(nt.includes(wt)||wt.includes(nt))ts=Math.min(nt.length,wt.length)>=15?.9:.7;   // Kindle titles can carry an "X and Y (eds), " prefix
       else{const aw=new Set(nt.split(' ')),bw=new Set(wt.split(' '));let common=0;aw.forEach(x=>{if(x.length>2&&bw.has(x))common++});ts=common/Math.max(aw.size,bw.size,1)}
     }
     const names=DB.wc.filter(c=>c.work_id===w.id).map(c=>{const p=P(c.person_id);return p?p.name.toLowerCase():''}).join(' | ');
@@ -2185,6 +2197,127 @@ async function kiChapterLinks(w,ki){
   }
   return map;
 }
+/* Repair (v2.12) for Kindle imports made before v2.12. The old importer paired a note with
+   a highlight only when their Kindle locations were identical, so (a) most notes became separate records
+   and (b) a note whose location equalled the NEXT highlight's start was attached to that wrong highlight.
+   The Kindle notebook file is the ground truth: the v2.12 parser says which notes belong to which highlight.
+   Settings → "Repair an earlier Kindle import" runs it: preview (dryRun) first, then fix.
+   Records edited since the import (text not matching any Kindle note) are left alone and reported.
+   Returns a backup of every record it changes or deletes. */
+async function kiRepairFromFile(workId,html,opt){
+  opt=opt||{};
+  const sq=t=>String(t||'').replace(/\s+/g,'');
+  const plainH=h=>sq(stripHtml(h||''));
+  const locOf=n=>((n.locators||[]).find(l=>l.type==='kindle')||{}).value||'';
+  const fresh=parseKindleHtml(html).entries;
+  const kNotes=new Set(fresh.flatMap(e=>e.note?e.note.split(/\n{2,}(?=)/):[]).map(sq));      // individual Kindle note texts
+  const allNoteTexts=new Set([...fresh.map(e=>sq(e.note)).filter(Boolean)]);
+  const recs=DB.notes.filter(n=>n.work_id===workId&&locOf(n));
+  const isKindleNoteText=t=>!t||allNoteTexts.has(t)||kNotes.has(t)||fresh.some(e=>e.note&&sq(e.note).includes(t)&&t.length>20);
+  const rep={highlightsFixed:0,alreadyRight:0,noteRecordsRemoved:0,editedLeftAlone:[],unmatched:[]};
+  const backup=[],updates=[],deletes=[];
+  const target=new Map(),skipped=new Set();                 // note-text → highlight record it belongs to
+  for(const e of fresh){
+    if(!e.quote)continue;
+    const r=recs.find(n=>locOf(n)===e.loc&&plainH(n.quote_html)===sq(e.quote));
+    if(!r){rep.unmatched.push('highlight '+e.page+'/'+e.loc);continue}
+    if(e.note)e.note.split(/\n{2,}/).forEach(t=>target.set(sq(t),r));
+    if(e.note)target.set(sq(e.note),r);
+    const cur=plainH(r.note_html),want=sq(e.note);
+    if(cur===want){rep.alreadyRight++;continue}
+    if(!isKindleNoteText(cur)){skipped.add(r);rep.editedLeftAlone.push(e.page+'/'+e.loc+' (quote record): '+stripHtml(r.note_html).slice(0,50));continue}
+    updates.push({r,patch:{note_html:e.note?textToHtml(e.note):''}});
+  }
+  for(const n of recs){
+    if(plainH(n.quote_html))continue;                          // only note-only records
+    const t=plainH(n.note_html);
+    const standalone=fresh.some(e=>!e.quote&&sq(e.note)===t);
+    if(standalone)continue;                                    // a genuine standalone note in Kindle too
+    let h=target.get(t);
+    if(!h&&t.length>20){const e=fresh.find(e=>e.quote&&e.note&&sq(e.note).includes(t));
+      if(e)h=recs.find(r=>locOf(r)===e.loc&&plainH(r.quote_html)===sq(e.quote))}
+    if(!h){rep.editedLeftAlone.push(locOf(n)+' (note record): '+stripHtml(n.note_html).slice(0,50));continue}
+    if(skipped.has(h)){rep.editedLeftAlone.push(locOf(n)+' (note record kept, its quotation was edited): '+stripHtml(n.note_html).slice(0,50));continue}
+    deletes.push({n,h});
+  }
+  // carry anything you added to a note record (tags, purposes, scripture) onto its quotation
+  const uni=(a,b)=>[...new Set([...(a||[]),...(b||[])])];
+  for(const {n,h} of deletes){
+    let u=updates.find(x=>x.r===h);if(!u){u={r:h,patch:{}};updates.push(u)}
+    u.patch.tags=uni(u.patch.tags||h.tags,n.tags);
+    u.patch.purposes=uni(u.patch.purposes||h.purposes,n.purposes);
+    u.patch.purpose_values=Object.assign({},n.purpose_values||{},u.patch.purpose_values||h.purpose_values||{});
+    const sr=[...(u.patch.scripture_refs||h.scripture_refs||[])];
+    (n.scripture_refs||[]).forEach(x=>{if(!sr.some(y=>JSON.stringify(y)===JSON.stringify(x)))sr.push(x)});u.patch.scripture_refs=sr;
+  }
+  rep.highlightsFixed=updates.filter(u=>'note_html' in u.patch).length;rep.noteRecordsRemoved=deletes.length;
+  updates.forEach(u=>backup.push(JSON.parse(JSON.stringify(u.r))));deletes.forEach(d=>backup.push(JSON.parse(JSON.stringify(d.n))));
+  if(opt.dryRun)return{report:rep,backup};
+  const errors=[];
+  for(const u of updates){
+    const patch={...u.patch,updated_at:new Date().toISOString()};
+    const{error}=await sb.from('notes').update(patch).eq('id',u.r.id);
+    if(error){errors.push(u.r.id+': '+error.message);continue}
+    Object.assign(u.r,patch);
+  }
+  const ids=deletes.map(d=>d.n.id);
+  for(let i=0;i<ids.length;i+=100){
+    const chunk=ids.slice(i,i+100);
+    const{error}=await sb.from('notes').delete().in('id',chunk);
+    if(error){errors.push('delete: '+error.message);continue}
+    DB.notes=DB.notes.filter(n=>!chunk.includes(n.id));
+  }
+  rep.errors=errors;
+  return{report:rep,backup};
+}
+
+let KR=null;
+async function kiRepairFile(file){
+  if(!file)return;
+  try{
+    const html=await file.text();const parsed=parseKindleHtml(html);
+    const best=kindleMatchWorks(parsed.title,parsed.authors)[0];
+    KR={html,title:parsed.title,wid:(best&&best.score>=.5)?best.work.id:'',report:null};
+    await kiRepairPreview();
+  }catch(e){alert('Could not read that Kindle file: '+e.message)}
+}
+async function kiRepairPreview(){
+  KR.report=KR.wid?(await kiRepairFromFile(KR.wid,KR.html,{dryRun:true})).report:null;
+  const r=KR.report;
+  const opts=[...DB.works].sort((a,b)=>a.title.localeCompare(b.title)).map(w=>`<option value="${w.id}" ${w.id===KR.wid?'selected':''}>${esc(w.title)}</option>`).join('');
+  const nothing=r&&!r.highlightsFixed&&!r.noteRecordsRemoved;
+  $('modal').innerHTML=`
+  <h3>Repair an earlier Kindle import</h3>
+  <p class="small muted">Imports made before v2.12 split each Kindle note into its own record. This puts every note back with its quotation, using <b>${esc(KR.title)}</b> as the reference. Tags, purposes and scripture you added to a note record move onto the quotation. Records you've edited since the import are left alone.</p>
+  <label>Book in Notes on Books</label>
+  <select onchange="KR.wid=this.value;kiRepairPreview()"><option value="">— choose —</option>${opts}</select>
+  ${r?`<div class="small" style="margin-top:10px">
+    ${nothing?'<p>✓ Nothing to repair — this book’s notes are already with their quotations.</p>':`<ul style="margin:4px 0 0 18px;padding:0">
+      <li>${r.highlightsFixed} quotation${r.highlightsFixed===1?'':'s'} will get ${r.highlightsFixed===1?'its':'their'} note back</li>
+      <li>${r.noteRecordsRemoved} separate note record${r.noteRecordsRemoved===1?'':'s'} will be merged in and removed</li>
+      <li>${r.alreadyRight} already correct</li></ul>`}
+    ${r.editedLeftAlone.length?`<p class="muted" style="margin-top:6px">Left alone because you've edited them (fix by hand):</p><ul style="margin:0 0 0 18px;padding:0" class="muted">${r.editedLeftAlone.map(x=>'<li>'+esc(x)+'</li>').join('')}</ul>`:''}
+    ${r.unmatched.length?`<p class="muted" style="margin-top:6px">${r.unmatched.length} highlight${r.unmatched.length===1?'':'s'} in the file weren't found in this book (not imported, or the quote was edited).</p>`:''}
+  </div>`:''}
+  <div class="row" style="margin-top:14px">
+    ${r&&!nothing?'<button class="btn" onclick="kiRepairRun()">Repair</button>':''}
+    <button class="btn sec" onclick="closeModal()">${r&&!nothing?'Cancel':'Close'}</button>
+  </div>
+  ${r&&!nothing?'<p class="small muted">A backup of every record it changes is downloaded first.</p>':''}
+  <p class="small muted" id="kr-status"></p>`;
+  $('modal-bg').classList.remove('hidden');
+}
+async function kiRepairRun(){
+  const st=$('kr-status');if(st)st.textContent='Repairing…';
+  const pre=await kiRepairFromFile(KR.wid,KR.html,{dryRun:true});
+  dl('kindle-repair-backup-'+new Date().toISOString().slice(0,10)+'.json',JSON.stringify({format:'notes-on-books-repair-backup',work_id:KR.wid,notes:pre.backup},null,1));
+  const res=await kiRepairFromFile(KR.wid,KR.html);
+  const r=res.report,wid=KR.wid;KR=null;
+  closeModal();
+  toast(r.errors&&r.errors.length?'Repair finished with errors: '+r.errors[0]:`Repaired: ${r.highlightsFixed} quotations got their notes back, ${r.noteRecordsRemoved} separate note records merged`);
+  gotoWorkNotes(wid);
+}
+
 async function finishKindleImport(wid,ki){
   const have=new Set(DB.notes.filter(n=>n.work_id===wid).flatMap(n=>(n.locators||[]).filter(l=>l.type==='kindle').map(l=>String(l.value))));
   const fresh=ki.entries.filter(e=>!(e.loc&&have.has(String(e.loc))));
@@ -3252,14 +3385,15 @@ function renderSettings(){
       <button class="btn sec" onclick="exportCSV()">⬇ Notes as CSV</button>
       <label class="btn sec" style="margin:0">⬆ Import backup JSON<input type="file" accept=".json" style="display:none" onchange="importJSON(this.files[0])"></label>
       <label class="btn sec" style="margin:0">⬆ Import from Kindle (HTML)<input type="file" accept=".html,.htm,text/html" style="display:none" onchange="importKindleFile(this.files[0]);this.value=''"></label>
+      <label class="btn sec" style="margin:0">🔧 Repair an earlier Kindle import<input type="file" accept=".html,.htm,text/html" style="display:none" onchange="kiRepairFile(this.files[0]);this.value=''"></label>
     </div>
-    <p class="small muted">Kindle: on the book's Notebook page, tap "Export Notebook" to download the HTML file, then import it here.</p>
+    <p class="small muted">Kindle: on the book's Notebook page, tap "Export Notebook" to download the HTML file, then import it here. Imported a book before v2.12 and its notes came in as separate records? Use "Repair an earlier Kindle import" with the same file.</p>
     <p class="small muted" id="imp-status"></p>
   </div>
   ${healthCardHtml()}
   <div class="card set-section">
     <h3>Account</h3>
-    <p class="small muted">${esc((USER&&USER.email)||'')} · Notes on Books v2.11</p>
+    <p class="small muted">${esc((USER&&USER.email)||'')} · Notes on Books v2.12</p>
     <button class="btn sec" onclick="sb.auth.signOut().then(()=>location.reload())">Sign out</button>
   </div>`;
   const pinIn=$('pin-in');if(pinIn)makeAutocomplete(pinIn,allTags,{onEnter:v=>{pinIn.value=v;pin(v)}});

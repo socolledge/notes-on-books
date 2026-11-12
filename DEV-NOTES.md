@@ -490,3 +490,10 @@ session-info tools for full history).
 - Only applies to edited volumes (`kiIsEditedVolume`: editors on the work, or chapter authors who aren't the book's authors), so monographs whose publishers register chapters are untouched.
 - `kiMatchPart`: strips "Chapter 3", "3.", "3 " prefixes; exact title, main title (before the colon), prefix match, then word-overlap with a clear-winner rule. Front/back matter headings (`KI_SKIP_HEAD`: Contents, Notes, Index, Acknowledgements, Notes on Contributors…) never match; unmatched headings fall back to the old chapter locator.
 - Import toast reports "N cited to their chapter".
+
+## v2.12 — 2026-11-11 — Kindle notes stay with their highlight
+- Bug: `parseKindleHtml` paired a Note with the preceding Highlight only when their Kindle locations were identical. Kindle anchors a note at the END of its highlight (e.g. Highlight Loc 52 → Note Loc 61), so almost every note became its own record.
+- Fix: `kiNoteBelongs(h,n)` — same chapter section, and the note's location falls within the highlight's span (0 … ⌈chars/100⌉+3 locations); for page-only exports, same or next page. A highlight now absorbs every following note that belongs to it (joined as separate paragraphs).
+- Checked against the real "Puritanism and Emotion" notebook: 81/81 notes attach (one highlight carries three).
+- Settings → "🔧 Repair an earlier Kindle import": choose the same Kindle notebook file → book auto-matched → preview (`kiRepairFromFile(wid, html, {dryRun:true})`) → Repair. Uses the v2.12 parse as ground truth: sets each quotation's note to its Kindle note(s), merges tags/purposes/purpose values/scripture from the separate note records, deletes those records. Records edited since the import (text no longer a Kindle note) are left alone and listed, as are note records whose quotation was edited. Downloads `kindle-repair-backup-YYYY-MM-DD.json` of every touched record first. Re-running reports "Nothing to repair".
+- `kindleMatchWorks`: title containment scores .9 when the shorter title is ≥15 chars (Kindle titles like "Ryrie and Schwanda (eds), Puritanism and Emotion…" now auto-match).
